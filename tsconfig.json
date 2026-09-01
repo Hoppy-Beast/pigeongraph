@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "files": [],
+  "references": [
+    { "path": "./packages/supergraph-schema" },
+    { "path": "./packages/supergraph-substrate" },
+    { "path": "./packages/supergraph-semantic" },
+    { "path": "./packages/supergraph-client" },
+    { "path": "./packages/supergraph-mcp" }
+  ]
+}

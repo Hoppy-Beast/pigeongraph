@@ -1,0 +1,525 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://supergraph.dev/schemas/super-node.v1.json",
+  "title": "UnifiedSuperNode",
+  "description": "Formal schema for a unified Super-Node encompassing Layer 1 (Fast Substrate), Layer 2 (Slow Semantic), and Layer 3 (Relational & Process Flow) data with race-condition-free multi-clock versioning.",
+  "type": "object",
+  "required": [
+    "id",
+    "urn",
+    "kind",
+    "name",
+    "qualifiedName",
+    "repoId",
+    "versioning",
+    "substrate",
+    "semantic",
+    "processFlow"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uri",
+      "description": "Globally unique identifier for the Super-Node."
+    },
+    "urn": {
+      "type": "string",
+      "pattern": "^urn:supergraph:[a-zA-Z0-9_-]+:[a-zA-Z0-9_./-]+(#[a-zA-Z0-9_.:]+)?$",
+      "description": "Uniform Resource Name identifying the node across workspace boundaries."
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "file", "module", "class", "struct", "interface", "trait", "function",
+        "method", "property", "field", "variable", "constant", "enum",
+        "enum_member", "type_alias", "namespace", "route", "tool", "document",
+        "section", "community", "process", "contract", "basic_block"
+      ],
+      "description": "Structural discriminator of the entity."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unqualified local symbol or entity name."
+    },
+    "qualifiedName": {
+      "type": "string",
+      "description": "Fully qualified scoped identifier within the workspace."
+    },
+    "repoId": {
+      "type": "string",
+      "description": "Identifier of the containing repository or workspace."
+    },
+    "versioning": {
+      "$ref": "#/$defs/NodeVersioning"
+    },
+    "substrate": {
+      "$ref": "#/$defs/Layer1SubstrateData"
+    },
+    "semantic": {
+      "$ref": "#/$defs/Layer2SemanticData"
+    },
+    "processFlow": {
+      "$ref": "#/$defs/Layer3ProcessFlowData"
+    },
+    "customMetadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Arbitrary framework-specific or extension metadata."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "NodeVersioning": {
+      "type": "object",
+      "required": [
+        "lamportClock",
+        "vectorClock",
+        "layerEpochs",
+        "contentSha256",
+        "astStructuralHash",
+        "semanticValidityHash"
+      ],
+      "properties": {
+        "lamportClock": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "vectorClock": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "layerEpochs": {
+          "type": "object",
+          "required": ["substrateEpoch", "semanticEpoch", "processEpoch"],
+          "properties": {
+            "substrateEpoch": { "type": "integer", "minimum": 0 },
+            "semanticEpoch": { "type": "integer", "minimum": 0 },
+            "processEpoch": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "contentSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "astStructuralHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "semanticValidityHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "lastModifiedTimestampMs": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Layer1SubstrateData": {
+      "type": "object",
+      "required": [
+        "sourceLocation",
+        "language",
+        "outgoingEdges",
+        "astEpochTimestamp"
+      ],
+      "properties": {
+        "sourceLocation": {
+          "$ref": "#/$defs/SourceLocation"
+        },
+        "language": { "type": "string" },
+        "symbolSignature": { "type": "string" },
+        "visibility": {
+          "type": "string",
+          "enum": ["public", "private", "protected", "internal", "package-private"]
+        },
+        "modifiers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "async", "static", "abstract", "exported", "mutating",
+              "const", "virtual", "override", "final", "generator",
+              "readonly", "default"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "returnType": { "type": "string" },
+        "parameters": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ParameterDefinition" }
+        },
+        "typeParameters": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "decorators": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DecoratorDefinition" }
+        },
+        "outgoingEdges": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SubstrateEdge" }
+        },
+        "unresolvedReferences": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/UnresolvedReference" }
+        },
+        "rawDocstring": { "type": "string" },
+        "astEpochTimestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Layer2SemanticData": {
+      "type": "object",
+      "required": [
+        "validityStatus",
+        "communityClusters",
+        "semanticEmbeddings"
+      ],
+      "properties": {
+        "validityStatus": {
+          "type": "string",
+          "enum": [
+            "VALID", "SOFT_DIRTY", "STALE_RETRY_QUEUED",
+            "INVALIDATED", "INFERENCE_IN_PROGRESS"
+          ]
+        },
+        "conceptualSummary": { "type": "string" },
+        "rationaleNodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RationaleNode" }
+        },
+        "multimodalAssociations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/MultimodalAssociation" }
+        },
+        "adrReferences": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/AdrReference" }
+        },
+        "communityClusters": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/LeidenCommunityMembership" }
+        },
+        "semanticEmbeddings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SemanticEmbeddingRecord" }
+        },
+        "lastInferenceModel": { "type": "string" },
+        "lastInferenceTimestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Layer3ProcessFlowData": {
+      "type": "object",
+      "required": [
+        "entryPointScore",
+        "isEntryPoint",
+        "processFlowSequences",
+        "crossRepoContracts"
+      ],
+      "properties": {
+        "isEntryPoint": { "type": "boolean" },
+        "entryPointScore": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "entryPointType": {
+          "type": "string",
+          "enum": [
+            "HTTP_ROUTE", "MCP_TOOL", "CLI_COMMAND",
+            "EVENT_SUBSCRIBER", "RPC_HANDLER", "CRON_JOB", "NONE"
+          ]
+        },
+        "processFlowSequences": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ProcessStepSequence" }
+        },
+        "crossRepoContracts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/CrossRepoContractLinkage" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SourceLocation": {
+      "type": "object",
+      "required": ["filePath", "startLine", "startColumn", "endLine", "endColumn"],
+      "properties": {
+        "filePath": { "type": "string" },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "startColumn": { "type": "integer", "minimum": 0 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "endColumn": { "type": "integer", "minimum": 0 },
+        "byteRange": {
+          "type": "object",
+          "required": ["startByte", "endByte"],
+          "properties": {
+            "startByte": { "type": "integer", "minimum": 0 },
+            "endByte": { "type": "integer", "minimum": 0 }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ParameterDefinition": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "defaultValue": { "type": "string" },
+        "isOptional": { "type": "boolean", "default": false },
+        "isRest": { "type": "boolean", "default": false }
+      },
+      "additionalProperties": false
+    },
+    "DecoratorDefinition": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "arguments": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "line": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "SubstrateEdge": {
+      "type": "object",
+      "required": ["targetId", "kind", "confidence", "provenance"],
+      "properties": {
+        "edgeId": { "type": "string" },
+        "targetId": { "type": "string", "format": "uri" },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "CONTAINS", "CALLS", "IMPORTS", "EXPORTS", "EXTENDS", "IMPLEMENTS",
+            "REFERENCES", "TYPE_OF", "RETURNS", "INSTANTIATES", "OVERRIDES",
+            "DECORATES", "DYNAMIC_DISPATCH_CALLBACK", "DYNAMIC_DISPATCH_EVENT",
+            "DYNAMIC_DISPATCH_REACT_STATE", "DYNAMIC_DISPATCH_FPTR",
+            "HANDLES_ROUTE", "HANDLES_TOOL", "QUERIES_ORM"
+          ]
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["EXTRACTED", "INFERRED", "AMBIGUOUS"]
+        },
+        "confidenceScore": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 1.0
+        },
+        "provenance": {
+          "type": "string",
+          "enum": [
+            "tree-sitter-ast", "scip-indexer", "native-rust-synthesizer",
+            "heuristic-resolver", "llm-inference"
+          ]
+        },
+        "dispatchMechanism": { "type": "string" },
+        "location": { "$ref": "#/$defs/SourceLocation" },
+        "sourceAttributeEpoch": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "UnresolvedReference": {
+      "type": "object",
+      "required": ["referenceName", "referenceKind", "line", "col"],
+      "properties": {
+        "referenceName": { "type": "string" },
+        "referenceKind": { "type": "string" },
+        "line": { "type": "integer" },
+        "col": { "type": "integer" },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "failed", "resolved"]
+        },
+        "candidates": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RationaleNode": {
+      "type": "object",
+      "required": ["purpose", "architecturalPattern"],
+      "properties": {
+        "purpose": { "type": "string" },
+        "architecturalPattern": { "type": "string" },
+        "invariants": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "tradeoffs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "modelMetadata": {
+          "type": "object",
+          "properties": {
+            "modelName": { "type": "string" },
+            "promptVersion": { "type": "string" },
+            "generatedAt": { "type": "string", "format": "date-time" }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "MultimodalAssociation": {
+      "type": "object",
+      "required": ["assetType", "uri", "relevanceScore"],
+      "properties": {
+        "assetType": {
+          "type": "string",
+          "enum": [
+            "markdown_doc", "pdf", "architecture_diagram",
+            "video_transcript", "spreadsheet", "rfc_adr",
+            "live_db_schema", "mcp_tool_spec"
+          ]
+        },
+        "uri": { "type": "string" },
+        "title": { "type": "string" },
+        "relevanceScore": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "extractedSnippet": { "type": "string" },
+        "mediaCoordinates": {
+          "type": "object",
+          "properties": {
+            "pageNumber": { "type": "integer" },
+            "timestampSeconds": { "type": "number" },
+            "sectionHeading": { "type": "string" }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "AdrReference": {
+      "type": "object",
+      "required": ["adrId", "title", "status"],
+      "properties": {
+        "adrId": { "type": "string" },
+        "title": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["PROPOSED", "ACCEPTED", "SUPERSEDED", "REJECTED"]
+        },
+        "uri": { "type": "string" },
+        "summary": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "LeidenCommunityMembership": {
+      "type": "object",
+      "required": ["communityId", "communityLabel", "cohesionScore"],
+      "properties": {
+        "communityId": { "type": "string" },
+        "communityLabel": { "type": "string" },
+        "hierarchyLevel": { "type": "integer", "default": 0 },
+        "cohesionScore": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "godNodeScore": { "type": "number" },
+        "isGodNode": { "type": "boolean", "default": false }
+      },
+      "additionalProperties": false
+    },
+    "SemanticEmbeddingRecord": {
+      "type": "object",
+      "required": ["model", "dimensions", "vector", "chunkIndex", "contentHash"],
+      "properties": {
+        "id": { "type": "string" },
+        "model": { "type": "string" },
+        "dimensions": { "type": "integer" },
+        "vector": {
+          "type": "array",
+          "items": { "type": "number" }
+        },
+        "chunkIndex": { "type": "integer", "minimum": 0 },
+        "contentHash": { "type": "string" },
+        "embeddingEpoch": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "ProcessStepSequence": {
+      "type": "object",
+      "required": ["processId", "processName", "stepIndex", "stepRole"],
+      "properties": {
+        "processId": { "type": "string" },
+        "processName": { "type": "string" },
+        "stepIndex": { "type": "integer", "minimum": 1 },
+        "stepRole": {
+          "type": "string",
+          "enum": [
+            "ENTRY_POINT", "VALIDATOR", "INTERMEDIATE_TRANSFORMER",
+            "BUSINESS_LOGIC", "DB_MUTATION", "EXTERNAL_GATEWAY", "TERMINAL_SINK"
+          ]
+        },
+        "upstreamNodeIds": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" }
+        },
+        "downstreamNodeIds": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" }
+        },
+        "branchCondition": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "CrossRepoContractLinkage": {
+      "type": "object",
+      "required": [
+        "contractId", "role", "protocol", "targetRepoUrn", "complianceStatus"
+      ],
+      "properties": {
+        "contractId": { "type": "string" },
+        "role": {
+          "type": "string",
+          "enum": ["PROVIDER", "CONSUMER"]
+        },
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "REST_HTTP", "GRAPHQL", "GRPC", "KAFKA_TOPIC",
+            "SHARED_DB_SCHEMA", "MCP_PROTOCOL"
+          ]
+        },
+        "targetRepoUrn": { "type": "string" },
+        "targetSymbolUid": { "type": "string" },
+        "interfaceSchemaDigest": { "type": "string" },
+        "complianceStatus": {
+          "type": "string",
+          "enum": [
+            "COMPLIANT", "DRIFT_DETECTED", "BREAKING_MISMATCH", "UNRESOLVED"
+          ]
+        },
+        "driftDiagnostics": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
