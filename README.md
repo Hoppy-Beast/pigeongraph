@@ -4,11 +4,11 @@
 > *Combines sub-second OS filesystem monitoring, dynamic dispatch synthesis, and asynchronous multimodal document intelligence into a zero-server architecture.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/hoppy-beast/pigeongraph/actions/workflows/ci.yml/badge.svg)](https://github.com/hoppy-beast/pigeongraph/actions)
+[![CI](https://github.com/Hoppy-Beast/pigeongraph/actions/workflows/ci.yml/badge.svg)](https://github.com/Hoppy-Beast/pigeongraph/actions)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)
 [![MCP Protocol](https://img.shields.io/badge/MCP-2024--11--05-orange)](https://modelcontextprotocol.io)
 
-**Author & Creator:** [MD. Mahinur Rahman Prachurza (Hoppy-Beast)](https://github.com/hoppy-beast)
+**Author & Creator:** [MD. Mahinur Rahman Prachurza (Hoppy-Beast)](https://github.com/Hoppy-Beast)
 
 ---
 
@@ -22,8 +22,8 @@ Existing code graph systems embody fatal architectural compromises:
 * **GitNexus**: Deep execution flows, but restricted by **non-commercial licensing (PolyForm 1.0)** and overwhelms LLMs with 17 granular tools.
 
 **PigeonGraph synthesizes the best of all three while engineering away their flaws:**
-1. **Sub-100ms Live Sync**: Native OS kernel watcher (`FSEvents`/`ReadDirectoryChangesW`/`inotify`) with adaptive debouncing (150ms–1500ms).
-2. **Dynamic Dispatch Synthesis**: Resolves EventEmitters (`.emit` $\to$ `.on`), Web framework routes (`GET /orders`), and React `setState` re-renders.
+1. **Sub-100ms Live Sync**: Native OS kernel watcher (`FSEvents` / `ReadDirectoryChangesW` / `inotify`) with adaptive debouncing (150ms–1500ms).
+2. **Dynamic Dispatch Synthesis**: Resolves EventEmitters (`.emit` -> `.on`), Web framework routes (`GET /orders`), and React `setState` re-renders.
 3. **Multimodal Knowledge Ingestion**: Connects code symbols directly to Markdown RFCs, Architecture Decision Records (ADRs), and `#WHY` design rationale tags.
 4. **Triple-Hash Invariant State Machine**: Prevents race conditions between fast AST edits (<15ms) and slow background LLM document passes.
 5. **1-Shot Agent MCP Paradigm**: AI agents get definitions, call hierarchies, dynamic dispatches, blast radius, and source spans in **1 single turn**.
@@ -86,7 +86,7 @@ flowchart TD
 
 ## 📦 Monorepo Packages
 
-* **`@pigeongraph/schema`**: Draft 2020-12 formal JSON schema, invariant hash engines ($\mathcal{H}_{\text{content}}$, $\mathcal{H}_{\text{ast}}$, $\mathcal{H}_{\text{semantic\_inv}}$), and Lamport/Vector clocks.
+* **`@pigeongraph/schema`**: Draft 2020-12 formal JSON schema, invariant hash engines (`H_content`, `H_ast`, `H_semantic_inv`), and Lamport/Vector clocks.
 * **`@pigeongraph/substrate`**: Sub-second AST parsing, EventEmitters, framework route synthesizers, and SQLite WAL engine.
 * **`@pigeongraph/semantic`**: Priority-tiered persistent queue, prompt injection defanging sandbox, ADR parser, and semantic edge synthesizers.
 * **`@pigeongraph/client`**: Hot in-memory Graphology engine, dual-buffer state reconciliation, and 1-shot exploration tools.
@@ -99,7 +99,7 @@ flowchart TD
 ### 1. Installation
 
 ```bash
-git clone https://github.com/hoppy-beast/pigeongraph.git
+git clone https://github.com/Hoppy-Beast/pigeongraph.git
 cd pigeongraph
 npm install
 npm run build
@@ -133,7 +133,7 @@ Add to your project's `.gemini/antigravity/mcp/pigeongraph.json` or MCP settings
     "pigeongraph": {
       "command": "node",
       "args": [
-        "path/to/pigeongraph/packages/supergraph-mcp/dist/cli.js",
+        "path/to/PigeonGraph/packages/pigeongraph-mcp/dist/cli.js",
         "serve-mcp"
       ]
     }
@@ -149,7 +149,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "pigeongraph": {
       "command": "node",
-      "args": ["path/to/pigeongraph/packages/supergraph-mcp/dist/cli.js", "serve-mcp"]
+      "args": ["path/to/PigeonGraph/packages/pigeongraph-mcp/dist/cli.js", "serve-mcp"]
     }
   }
 }
@@ -163,7 +163,7 @@ Add to `.cursor/mcp.json`:
   "mcpServers": {
     "pigeongraph": {
       "command": "node",
-      "args": ["path/to/pigeongraph/packages/supergraph-mcp/dist/cli.js", "serve-mcp"]
+      "args": ["path/to/PigeonGraph/packages/pigeongraph-mcp/dist/cli.js", "serve-mcp"]
     }
   }
 }
