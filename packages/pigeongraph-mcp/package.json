@@ -1,0 +1,26 @@
+{
+  "name": "@pigeongraph/mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "pigeongraph": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "tsx --test test/**/*.test.ts"
+  },
+  "dependencies": {
+    "@pigeongraph/schema": "1.0.0",
+    "@pigeongraph/substrate": "1.0.0",
+    "@pigeongraph/semantic": "1.0.0",
+    "@pigeongraph/client": "1.0.0"
+  }
+}

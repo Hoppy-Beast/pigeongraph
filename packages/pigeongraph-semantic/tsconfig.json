@@ -3,21 +3,20 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "composite": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "composite": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "files": [],
+  "include": ["src/**/*"],
   "references": [
-    { "path": "./packages/pigeongraph-schema" },
-    { "path": "./packages/pigeongraph-substrate" },
-    { "path": "./packages/pigeongraph-semantic" },
-    { "path": "./packages/pigeongraph-client" },
-    { "path": "./packages/pigeongraph-mcp" }
+    { "path": "../pigeongraph-schema" },
+    { "path": "../pigeongraph-substrate" }
   ]
 }
