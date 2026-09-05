@@ -183,6 +183,19 @@ describe('Client Execution Layer & Query Surface Tests', () => {
     assert.equal(response.served_spans[0].filePath, 'src/auth/jwt.ts');
   });
 
+  test('SuperGraphExploreEngine resolves fuzzy natural language queries with multi-signal ranking', () => {
+    // Natural language query where individual words match across symbol name, docstrings, and comments
+    const response = exploreEngine.explore({
+      query: 'how to verify auth token in login flow',
+      include_blast_radius: true,
+    });
+
+    assert.ok(response.query_summary.resolved_anchor, 'Should resolve an anchor for natural language query');
+    assert.equal(response.query_summary.resolved_anchor, nodeA.id);
+    assert.equal(response.symbols[0].name, 'verifyToken');
+    assert.equal(response.query_summary.epistemic_status, 'PROVISIONAL_LOWER_BOUND');
+  });
+
   test('AnalyticalToolsEngine computes blast radius impact and traces shortest path', () => {
     // Blast radius impact
     const impact = analyticalEngine.calculateImpact({

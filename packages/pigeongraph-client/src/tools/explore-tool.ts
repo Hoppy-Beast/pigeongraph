@@ -75,18 +75,17 @@ export class SuperGraphExploreEngine {
 
     // 1. Resolve Anchor Symbol
     let matchedNodes: SuperNode[] = [];
+    let epistemicStatus: 'EXACT' | 'PROVISIONAL_LOWER_BOUND' = 'EXACT';
+
     if (input.symbol_anchor) {
       const exact = this.store.getNode(input.symbol_anchor);
       if (exact) matchedNodes = [exact];
     }
 
     if (matchedNodes.length === 0) {
-      matchedNodes = allNodes.filter(
-        (n) =>
-          n.name.toLowerCase().includes(queryTerm) ||
-          n.qualifiedName.toLowerCase().includes(queryTerm) ||
-          n.substrate.sourceLocation.filePath.toLowerCase().includes(queryTerm)
-      );
+      const result = this.rankNodesFuzzy(input.query, allNodes);
+      matchedNodes = result.ranked;
+      epistemicStatus = result.epistemicStatus;
     }
 
     const anchor = matchedNodes[0];
@@ -204,7 +203,7 @@ export class SuperGraphExploreEngine {
       query_summary: {
         query: input.query,
         resolved_anchor: resolvedAnchor,
-        epistemic_status: 'EXACT',
+        epistemic_status: epistemicStatus,
         total_graph_nodes_searched: allNodes.length,
         duration_ms: Number(duration.toFixed(2)),
       },
@@ -216,6 +215,99 @@ export class SuperGraphExploreEngine {
       dynamic_dispatches: dynamicDispatches,
       blast_radius: blastRadius,
       served_spans: servedSpans,
+    };
+  }
+
+  private rankNodesFuzzy(query: string, nodes: SuperNode[]): { ranked: SuperNode[]; epistemicStatus: 'EXACT' | 'PROVISIONAL_LOWER_BOUND' } {
+    const queryTerm = query.toLowerCase().trim();
+    if (!queryTerm) return { ranked: [], epistemicStatus: 'PROVISIONAL_LOWER_BOUND' };
+
+    // 1. Direct exact match
+    const exactMatches = nodes.filter(
+      (n) => n.name.toLowerCase() === queryTerm || n.qualifiedName.toLowerCase() === queryTerm
+    );
+    if (exactMatches.length > 0) {
+      return { ranked: exactMatches, epistemicStatus: 'EXACT' };
+    }
+
+    // Direct substring match
+    const substringMatches = nodes.filter(
+      (n) =>
+        n.name.toLowerCase().includes(queryTerm) ||
+        n.qualifiedName.toLowerCase().includes(queryTerm) ||
+        n.substrate.sourceLocation.filePath.toLowerCase().includes(queryTerm)
+    );
+    if (substringMatches.length > 0) {
+      return { ranked: substringMatches, epistemicStatus: 'EXACT' };
+    }
+
+    // 2. Multi-Signal Fuzzy & Token Scoring
+    const stopWords = new Set(['how', 'to', 'in', 'the', 'a', 'an', 'of', 'for', 'with', 'and', 'or', 'at', 'by', 'on', 'is', 'it']);
+    const rawTokens = queryTerm
+      .replace(/[^a-z0-9_]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > 1 && !stopWords.has(t));
+
+    const queryKeywords = rawTokens.length > 0 ? rawTokens : queryTerm.split(/\s+/);
+    const scoredNodes: Array<{ node: SuperNode; score: number }> = [];
+
+    for (const node of nodes) {
+      let score = 0;
+
+      // Split camelCase & snake_case into tokens
+      const nameParts = node.name
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .toLowerCase()
+        .split(/[^a-z0-9]+/);
+      const qnameParts = node.qualifiedName
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .toLowerCase()
+        .split(/[^a-z0-9]+/);
+      const allSymbolTokens = new Set([...nameParts, ...qnameParts]);
+
+      for (const kw of queryKeywords) {
+        if (allSymbolTokens.has(kw)) {
+          score += 30;
+        } else {
+          for (const token of allSymbolTokens) {
+            if (token.startsWith(kw) || kw.startsWith(token)) {
+              score += 18;
+            } else if (token.includes(kw)) {
+              score += 10;
+            }
+          }
+        }
+
+        if (node.substrate.symbolSignature && node.substrate.symbolSignature.toLowerCase().includes(kw)) {
+          score += 12;
+        }
+
+        if (node.substrate.sourceLocation.filePath.toLowerCase().includes(kw)) {
+          score += 8;
+        }
+
+        if (node.substrate.rawDocstring && node.substrate.rawDocstring.toLowerCase().includes(kw)) {
+          score += 15;
+        }
+        if (node.semantic.conceptualSummary && node.semantic.conceptualSummary.toLowerCase().includes(kw)) {
+          score += 15;
+        }
+      }
+
+      if (node.processFlow.isEntryPoint) {
+        score += 2;
+      }
+
+      if (score > 0) {
+        scoredNodes.push({ node, score });
+      }
+    }
+
+    scoredNodes.sort((a, b) => b.score - a.score);
+
+    return {
+      ranked: scoredNodes.map((sn) => sn.node),
+      epistemicStatus: 'PROVISIONAL_LOWER_BOUND',
     };
   }
 }
