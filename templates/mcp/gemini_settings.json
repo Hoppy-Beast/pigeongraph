@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "pigeongraph": {
+      "command": "pigeongraph",
+      "args": ["serve-mcp"]
+    }
+  }
+}

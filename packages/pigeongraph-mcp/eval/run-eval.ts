@@ -83,6 +83,45 @@ async function main() {
     });
   }
 
+  // Add express (JavaScript / Node.js) if present in eval-sandbox
+  const expressPath = resolve('eval-sandbox', 'repos', 'express');
+  if (existsSync(expressPath)) {
+    benchmarks.push({
+      name: 'express',
+      tier: 'small',
+      language: 'JavaScript / Node',
+      repoPath: expressPath,
+      query: 'handle',
+      description: 'HTTP request router pipeline & middleware chain execution',
+    });
+  }
+
+  // Add zustand (TypeScript) if present in eval-sandbox
+  const zustandPath = resolve('eval-sandbox', 'repos', 'zustand');
+  if (existsSync(zustandPath)) {
+    benchmarks.push({
+      name: 'zustand',
+      tier: 'small',
+      language: 'TypeScript',
+      repoPath: zustandPath,
+      query: 'createStore',
+      description: 'Reactive state store creation & slice subscriber management',
+    });
+  }
+
+  // Add flask (Python) if present in eval-sandbox
+  const flaskPath = resolve('eval-sandbox', 'repos', 'flask');
+  if (existsSync(flaskPath)) {
+    benchmarks.push({
+      name: 'flask',
+      tier: 'small',
+      language: 'Python',
+      repoPath: flaskPath,
+      query: 'dispatch_request',
+      description: 'WSGI application context & endpoint request dispatch',
+    });
+  }
+
   const reports: Array<{
     benchmark: BenchmarkRow;
     armA: ArmAResult;

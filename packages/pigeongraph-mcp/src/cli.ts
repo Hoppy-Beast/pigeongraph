@@ -174,22 +174,35 @@ Next steps:
 - Run 'pigeongraph ui' to open the live architecture canvas
     `);
   } else if (command === 'install-mcp' || command === 'install') {
-    const res = AgentInstaller.installMcp({ projectRoot });
+    const targetIdx = args.indexOf('--target');
+    const target = targetIdx !== -1 ? (args[targetIdx + 1] as any) : 'all';
+    const modeIdx = args.indexOf('--mode');
+    const mode = modeIdx !== -1 ? (args[modeIdx + 1] as any) : 'auto';
+
+    const res = AgentInstaller.installMcp({ projectRoot, target, mode });
     console.log(`
 🐦 PigeonGraph MCP Registration
 ===============================
-${res.claudeUpdated ? `✅ Claude Desktop config updated: ${res.claudePath}` : `⚠️  Claude Desktop config not updated (path: ${res.claudePath})`}
-${res.cursorUpdated ? `✅ Cursor MCP config updated: ${res.cursorPath}` : `⚠️  Cursor MCP config not updated (path: ${res.cursorPath})`}
+Command configured : ${res.commandUsed} ${res.argsUsed.join(' ')}
 
-🎉 PigeonGraph is registered! Restart Claude Desktop or reload Cursor to start exploring.
+Target Integrations:
+${res.targets
+  .map((t) => (t.updated ? `  ✅ ${t.name}: ${t.path}` : `  ⚠️  ${t.name}: Skipped (${t.path})`))
+  .join('\n')}
+
+🎉 PigeonGraph registered! Restart your AI agent / IDE to start exploring.
     `);
   } else if (command === 'uninstall-mcp' || command === 'uninstall') {
-    const res = AgentInstaller.uninstallMcp({ projectRoot });
+    const targetIdx = args.indexOf('--target');
+    const target = targetIdx !== -1 ? (args[targetIdx + 1] as any) : 'all';
+
+    const res = AgentInstaller.uninstallMcp({ projectRoot, target });
     console.log(`
 🐦 PigeonGraph MCP Deregistration
 =================================
-${res.claudeUpdated ? `✅ Removed from Claude Desktop: ${res.claudePath}` : `ℹ️  Claude Desktop config unchanged.`}
-${res.cursorUpdated ? `✅ Removed from Cursor: ${res.cursorPath}` : `ℹ️  Cursor config unchanged.`}
+${res.targets
+  .map((t) => (t.updated ? `  ✅ Removed from ${t.name}: ${t.path}` : `  ℹ️  ${t.name}: ${t.details ?? 'Unchanged'}`))
+  .join('\n')}
 
 PigeonGraph MCP has been uninstalled.
     `);
