@@ -109,6 +109,13 @@ export class SuperGraphExploreEngine {
     const callChains: ExploreQueryResponse['execution_flows']['call_chains'] = [];
 
     if (anchor) {
+      if (anchor.processFlow.isEntryPoint) {
+        entryPoints.push({
+          type: anchor.processFlow.entryPointType ?? 'ENTRY_POINT',
+          handler: anchor.qualifiedName,
+        });
+      }
+
       const inNeighbors = this.store.getInNeighbors(anchor.id);
       const outNeighbors = this.store.getOutNeighbors(anchor.id);
 
@@ -140,13 +147,27 @@ export class SuperGraphExploreEngine {
     const dynamicDispatches: ExploreQueryResponse['dynamic_dispatches'] = [];
     if (anchor) {
       for (const edge of anchor.substrate.outgoingEdges) {
-        if (edge.kind.startsWith('DYNAMIC_DISPATCH')) {
+        if (edge.kind.startsWith('DYNAMIC_DISPATCH') || edge.kind === 'HANDLES_ROUTE') {
           dynamicDispatches.push({
             pattern: edge.kind,
             emitter: anchor.id,
             listener: edge.targetId,
             confidence: edge.confidenceScore,
           });
+        }
+      }
+
+      const inNeighbors = this.store.getInNeighbors(anchor.id);
+      for (const inNode of inNeighbors) {
+        for (const edge of inNode.substrate.outgoingEdges) {
+          if (edge.targetId === anchor.id && (edge.kind.startsWith('DYNAMIC_DISPATCH') || edge.kind === 'HANDLES_ROUTE')) {
+            dynamicDispatches.push({
+              pattern: edge.kind,
+              emitter: inNode.id,
+              listener: anchor.id,
+              confidence: edge.confidenceScore,
+            });
+          }
         }
       }
     }
