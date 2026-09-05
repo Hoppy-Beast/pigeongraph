@@ -8,6 +8,8 @@ export interface SubstrateDaemonOptions {
   repoId: string;
   dbPath?: string;
   wsPort?: number;
+  loneDebounceMs?: number;
+  burstDebounceMs?: number;
 }
 
 export class SubstrateDaemon {
@@ -30,6 +32,8 @@ export class SubstrateDaemon {
       db: this.db,
       streamer: this.streamer,
       clockManager: this.clockManager,
+      loneDebounceMs: options.loneDebounceMs,
+      burstDebounceMs: options.burstDebounceMs,
     });
   }
 

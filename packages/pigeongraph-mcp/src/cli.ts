@@ -10,8 +10,22 @@ async function main() {
   const projectRoot = process.cwd();
   const repoId = projectRoot.split(/[/\\]/).pop() ?? 'workspace';
 
+  const wsPort = process.env.PIGEONGRAPH_WS_PORT ? parseInt(process.env.PIGEONGRAPH_WS_PORT, 10) : undefined;
+  const dbPath = process.env.PIGEONGRAPH_DB_PATH || undefined;
+  const loneDebounceMs = process.env.PIGEONGRAPH_LONE_DEBOUNCE_MS ? parseInt(process.env.PIGEONGRAPH_LONE_DEBOUNCE_MS, 10) : undefined;
+  const burstDebounceMs = process.env.PIGEONGRAPH_BURST_DEBOUNCE_MS ? parseInt(process.env.PIGEONGRAPH_BURST_DEBOUNCE_MS, 10) : undefined;
+
+  const daemonOptions = {
+    projectRoot,
+    repoId,
+    wsPort,
+    dbPath,
+    loneDebounceMs,
+    burstDebounceMs,
+  };
+
   if (command === 'serve-mcp') {
-    const daemon = new SubstrateDaemon({ projectRoot, repoId });
+    const daemon = new SubstrateDaemon(daemonOptions);
     await daemon.start();
 
     const server = new SuperGraphMcpServer({
@@ -39,7 +53,7 @@ async function main() {
       console.error('Usage: pigeongraph explore <query>');
       process.exit(1);
     }
-    const daemon = new SubstrateDaemon({ projectRoot, repoId });
+    const daemon = new SubstrateDaemon(daemonOptions);
     await daemon.watcher.flushPendingBatch();
 
     const server = new SuperGraphMcpServer({ projectRoot, repoId, daemon });
