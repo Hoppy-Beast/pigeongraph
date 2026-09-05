@@ -12,7 +12,8 @@
   "scripts": {
     "build": "tsc -b",
     "test": "npm run test:all",
-    "test:all": "tsx --test packages/*/test/**/*.test.ts"
+    "test:all": "tsx --test packages/*/test/**/*.test.ts",
+    "bench": "tsx packages/pigeongraph-mcp/eval/run-eval.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
