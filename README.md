@@ -7,6 +7,7 @@
 [![CI](https://github.com/Hoppy-Beast/pigeongraph/actions/workflows/ci.yml/badge.svg)](https://github.com/Hoppy-Beast/pigeongraph/actions)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D22.5.0-brightgreen)](https://nodejs.org)
 [![MCP Protocol](https://img.shields.io/badge/MCP-2024--11--05-orange)](https://modelcontextprotocol.io)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Hoppy-Beast/pigeongraph/blob/main/assets/pigeongraph_demo.ipynb)
 
 [![Windows](https://img.shields.io/badge/Windows-supported-blue.svg)](#quickstart-and-setup)
 [![macOS](https://img.shields.io/badge/macOS-supported-blue.svg)](#quickstart-and-setup)
@@ -56,7 +57,9 @@ Everything runs locally with zero telemetry, requires no external database proce
 
 ## Quickstart and setup
 
-Get PigeonGraph running and configured in your editor in under 30 seconds:
+You can test PigeonGraph directly in your browser with Google Colab, or install locally:
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Hoppy-Beast/pigeongraph/blob/main/assets/pigeongraph_demo.ipynb)
 
 ### 1. Install
 
