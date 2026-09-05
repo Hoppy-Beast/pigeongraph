@@ -14,7 +14,7 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"try{require('node:fs').chmodSync('dist/cli.js',0o755)}catch{}\"",
     "test": "tsx --test test/**/*.test.ts",
     "bench": "tsx eval/run-eval.ts"
   },

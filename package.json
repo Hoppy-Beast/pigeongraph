@@ -41,7 +41,7 @@
     "pigeongraph": "./packages/pigeongraph-mcp/dist/cli.js"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && node -e \"try{require('node:fs').chmodSync('packages/pigeongraph-mcp/dist/cli.js',0o755)}catch{}\"",
     "test": "npm run test:all",
     "test:all": "tsx --test packages/*/test/**/*.test.ts",
     "bench": "tsx packages/pigeongraph-mcp/eval/run-eval.ts",
