@@ -44,7 +44,8 @@ export class EvalEngine {
           entry.name === 'node_modules' ||
           entry.name === 'dist' ||
           entry.name === 'build' ||
-          entry.name === '.nyc_output'
+          entry.name === '.nyc_output' ||
+          entry.name === 'eval-sandbox'
         ) {
           continue;
         }
