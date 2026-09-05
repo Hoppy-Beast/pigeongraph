@@ -58,7 +58,7 @@ pigeongraph/
 
 ## AI Coding Agent Directives
 
-If you are using or developing with an AI coding assistant (Claude Code, Cursor, Google Antigravity, Gemini, or GitHub Copilot), see [**`AGENTS.md`**](AGENTS.md) (or [**`agent.md`**](agent.md)) for repository architecture rules, invariant hash contracts, and self-dogfooding exploration instructions.
+If you are using or developing with an AI coding assistant (Claude Code, Cursor, Google Antigravity, Gemini, or GitHub Copilot), see [**`AGENTS.md`**](../AGENTS.md) in the repository root for architecture rules, invariant hash contracts, and self-dogfooding exploration instructions.
 
 ## Governance & Security
 
@@ -67,6 +67,6 @@ If you are using or developing with an AI coding assistant (Claude Code, Cursor,
 
 ## License & Attribution
 
-By contributing to PigeonGraph, you agree that your contributions will be licensed under the project's [MIT License](LICENSE).  
+By contributing to PigeonGraph, you agree that your contributions will be licensed under the project's [MIT License](../LICENSE).  
 Original Author & Creator: **MD. Mahinur Rahman Prachurza (Hoppy-Beast)**.
 

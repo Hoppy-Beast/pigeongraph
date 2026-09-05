@@ -18,7 +18,20 @@
 [![Gemini](https://img.shields.io/badge/Gemini_CLI-supported-blueviolet.svg)](#-agent-setup--mcp-integrations)
 [![GitHub Copilot](https://img.shields.io/badge/GitHub_Copilot-supported-blueviolet.svg)](#-agent-setup--mcp-integrations)
 
-**Author & Creator:** [MD. Mahinur Rahman Prachurza (Hoppy-Beast)](https://github.com/Hoppy-Beast)
+**Author & Creator:** [MD. Mahinur Rahman Prachurza (Hoppy-Beast)](https://github.com/Hoppy-Beast)  
+**Community & Directives:** [AGENTS.md](AGENTS.md) • [Contributing Guide](contribute/CONTRIBUTING.md) • [Code of Conduct](contribute/CODE_OF_CONDUCT.md) • [Security Policy](contribute/SECURITY.md)
+
+---
+
+### 👋 Welcome to PigeonGraph!
+
+Whether you are an engineer building systems from scratch, refactoring complex monorepos, or pairing with cutting-edge AI coding agents like **Claude Code**, **Google Antigravity**, **Cursor**, **Gemini**, or **GitHub Copilot**—we are thrilled to welcome you to PigeonGraph.
+
+Software development today moves faster than ever, and codebases have evolved into rich, living ecosystems of functions, classes, API routes, and asynchronous event streams. But when AI agents try to explore large projects with brute-force grep and whole-file reads, they hit a wall: 15-turn search loops, tens of thousands of wasted tokens, stale interface assumptions, and lost context.
+
+**PigeonGraph bridges this gap.** By combining sub-100ms local filesystem monitoring, dynamic runtime dispatch synthesis, zero-dependency SQLite storage, and a lightning-fast in-memory graph, PigeonGraph answers architectural questions in **a single, sub-millisecond turn** with **96%+ token reduction**.
+
+PigeonGraph is built with kindness, precision, and deep respect for the open-source community. It runs 100% offline with zero telemetry, zero proprietary binary locks, and a clean-room MIT license. We hope it makes your coding journey smoother, faster, and more fun!
 
 ---
 
@@ -36,9 +49,11 @@
 10. [📊 Empirical Benchmarks & Token Reduction](#-empirical-benchmarks--token-reduction) *(8 production repos tested)*
 11. [📦 Monorepo Packages](#-monorepo-packages)
 12. [❓ Troubleshooting & FAQ](#-troubleshooting--faq)
-13. [📜 License & Attribution](#-license--attribution)
+13. [🤝 Contributing Your Ideas & Solutions with `AGENTS.md`](#-contributing-your-ideas--solutions-with-agentsmd)
+14. [📜 License & Attribution](#-license--attribution)
 
 ---
+
 
 ## ⚡ Quickstart & 1-Command Setup
 
@@ -340,6 +355,8 @@ Untrusted code repositories may contain malicious comments or markdown files wit
 2. **Boundary Sandboxing**: Wraps untrusted source snippets inside `<untrusted_source sha256="...">` XML tags before LLM consumption.
 3. **Deterministic Token Isolation**: Guarantees zero adversarial system instruction hijacking.
 
+For full disclosure protocols, vulnerability reporting guidelines, and supported release channels, review our [**Security Policy (`contribute/SECURITY.md`)**](contribute/SECURITY.md).
+
 ---
 
 ## 💻 CLI & Reusable GitHub Action Reference
@@ -431,8 +448,30 @@ A: Yes. The in-memory Graphology store and Substrate SQLite WAL support concurre
 
 ---
 
+## 🤝 Contributing Your Ideas & Solutions with `AGENTS.md`
+
+We believe great software is built through open collaboration, curiosity, and shared passion. Whether you are an experienced engineer, a newcomer tinkering with code knowledge graphs, or pairing with an autonomous AI coding assistant, **we warmly welcome your ideas, solutions, and improvements!**
+
+### 🤖 Pair Programming with an AI Coding Agent?
+If you are using **Claude Code**, **Google Antigravity**, **Cursor**, **Gemini CLI**, or **GitHub Copilot**, contributing to PigeonGraph is as easy as pointing your agent to [**`AGENTS.md`**](AGENTS.md) in the repository root:
+
+* **Instant Architecture Context:** `AGENTS.md` provides AI agents with non-negotiable invariants (clean-room MIT license, 0-token deterministic Layer 1 AST extraction, triple-invariant hashes `H_content`/`H_ast`/`H_semantic_inv`), package dependency topology, and validation commands.
+* **Self-Dogfooding Navigation:** It teaches agents to run `pigeongraph explore "<query>"` before making edits so they understand call graphs and dynamic dispatches without burning tokens.
+* **Prompt Your Agent Directly:**
+  > *"Read `AGENTS.md` in the root of the repository and help me implement this feature / fix this issue with tests."*
+
+### 👩‍💻 Human Contributor Quick Links
+* **Step-by-Step Setup:** Follow our [**Contributing Guide (`contribute/CONTRIBUTING.md`)**](contribute/CONTRIBUTING.md) to set up your local development environment, build TypeScript packages, and run tests.
+* **Our Values:** We are dedicated to providing a welcoming, inclusive, and harassment-free community. Please review our [**Code of Conduct (`contribute/CODE_OF_CONDUCT.md`)**](contribute/CODE_OF_CONDUCT.md).
+* **Responsible Security:** Found a vulnerability? Check our [**Security Policy (`contribute/SECURITY.md`)**](contribute/SECURITY.md).
+
+Have a question, feedback, or an idea for PigeonGraph? Feel free to open an [Issue](https://github.com/Hoppy-Beast/pigeongraph/issues) or start a conversation in [Discussions](https://github.com/Hoppy-Beast/pigeongraph/discussions). We would love to collaborate with you!
+
+---
+
 ## 📜 License & Attribution
 
 This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
 **Copyright (c) 2026 MD. Mahinur Rahman Prachurza (Hoppy-Beast)**
+

@@ -1,4 +1,4 @@
-﻿# 🐦 AGENTS.md — PigeonGraph Contributor & Architecture Directives
+# 🐦 AGENTS.md — PigeonGraph Contributor & Architecture Directives
 
 Welcome, Agent. You are contributing to **PigeonGraph** — the unified, multi-layer code knowledge graph and Model Context Protocol (MCP) server for AI coding agents.
 
@@ -92,3 +92,12 @@ When you need to understand or modify code inside PigeonGraph:
 When ingesting external documents, Markdown specs, or user code in Layer 2:
 - Always route untrusted content through `PromptDefanger`.
 - Ensure injection sentinels (`<|im_start|>`, `<<SYS>>`, `[INST]`, `<|endoftext|>`) are neutralized with zero-width spaces (`\u200b`) and wrapped in `<untrusted_source>` SHA-256 boundaries.
+
+---
+
+## 📜 Policies & Contribution Guidelines
+- **Contributing**: [contribute/CONTRIBUTING.md](contribute/CONTRIBUTING.md)
+- **Code of Conduct**: [contribute/CODE_OF_CONDUCT.md](contribute/CODE_OF_CONDUCT.md)
+- **Security Policy**: [contribute/SECURITY.md](contribute/SECURITY.md)
+- **License**: [LICENSE](LICENSE)
+
