@@ -1,0 +1,19 @@
+name: 'PigeonGraph PR Blast Radius Bot'
+description: 'Zero-token AST invariant blast radius and breaking interface analyzer for Pull Requests'
+author: 'MD. Mahinur Rahman Prachurza (Hoppy-Beast)'
+inputs:
+  base_ref:
+    description: 'Base branch or git ref to compare against (e.g. origin/main)'
+    required: false
+    default: 'origin/main'
+runs:
+  using: 'composite'
+  steps:
+    - name: Run PigeonGraph Blast Radius Audit
+      shell: bash
+      run: |
+        npx pigeongraph audit-pr --base ${{ inputs.base_ref }} > pr-audit-report.md
+        if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+          cat pr-audit-report.md >> $GITHUB_STEP_SUMMARY
+        fi
+        cat pr-audit-report.md

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { SuperGraphMcpServer } from './server.js';
 import { UiServer } from './ui/ui-server.js';
-import { SubstrateDaemon } from '@pigeongraph/substrate';
+import { PrAuditor } from './audit/pr-auditor.js';
+import { SubstrateDaemon, AstExtractor } from '@pigeongraph/substrate';
+import { ClientGraphStore } from '@pigeongraph/client';
 import { createInterface } from 'node:readline';
 
 const args = process.argv.slice(2);
@@ -99,6 +101,64 @@ Press Ctrl+C to stop.
       await daemon.stop();
       process.exit(0);
     });
+  } else if (command === 'audit-pr') {
+    const baseIdx = args.indexOf('--base');
+    const baseRef = baseIdx !== -1 ? args[baseIdx + 1] : 'HEAD~1';
+    const headIdx = args.indexOf('--head');
+    const headRef = headIdx !== -1 ? args[headIdx + 1] : 'HEAD';
+    const isJson = args.includes('--json');
+
+    const { execSync } = await import('node:child_process');
+
+    let changedFileList: string[] = [];
+    try {
+      const diffOutput = execSync(`git diff --name-only ${baseRef} ${headRef}`, { encoding: 'utf-8', cwd: projectRoot });
+      changedFileList = diffOutput.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    } catch {
+      console.error(`Failed to inspect git diff between ${baseRef} and ${headRef}`);
+      process.exit(1);
+    }
+
+    const changedFiles: Array<{ filePath: string; oldContent: string; newContent: string }> = [];
+    for (const file of changedFileList) {
+      if (!file.match(/\.(ts|js|tsx|jsx|py|go|rs|java|c|cpp)$/i)) continue;
+      let oldContent = '';
+      let newContent = '';
+
+      try {
+        oldContent = execSync(`git show ${baseRef}:${file}`, { encoding: 'utf-8', cwd: projectRoot, stdio: ['pipe', 'pipe', 'ignore'] });
+      } catch {
+        oldContent = '';
+      }
+
+      try {
+        const fullPath = await import('node:path').then((p) => p.resolve(projectRoot, file));
+        const fs = await import('node:fs');
+        if (fs.existsSync(fullPath)) {
+          newContent = fs.readFileSync(fullPath, 'utf-8');
+        } else {
+          newContent = execSync(`git show ${headRef}:${file}`, { encoding: 'utf-8', cwd: projectRoot, stdio: ['pipe', 'pipe', 'ignore'] });
+        }
+      } catch {
+        newContent = '';
+      }
+
+      changedFiles.push({ filePath: file, oldContent, newContent });
+    }
+
+    const store = new ClientGraphStore();
+    const auditor = new PrAuditor({ store, extractor: new AstExtractor() });
+
+    const auditResult = auditor.auditFiles({
+      repoId,
+      changedFiles,
+    });
+
+    if (isJson) {
+      console.log(JSON.stringify(auditResult, null, 2));
+    } else {
+      console.log(auditResult.markdownReport);
+    }
   } else {
     console.log(`
 🐦 PigeonGraph CLI v1.0.0
@@ -108,6 +168,7 @@ Commands:
   pigeongraph serve-mcp         Start stdio Model Context Protocol (MCP) server
   pigeongraph explore <q>       Query knowledge graph from terminal
   pigeongraph ui [--port 5052]  Launch live in-browser architecture visualizer
+  pigeongraph audit-pr          Calculate PR blast radius and interface breaking risk
     `);
   }
 }

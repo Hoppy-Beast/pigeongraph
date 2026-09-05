@@ -288,6 +288,22 @@ export class AstExtractor {
           const isStatic = tokens.includes('static');
           const isAsync = tokens.includes('async');
 
+          let methodEndLine = lineNum;
+          let methodBraces = 0;
+          let foundMethodOpen = false;
+          for (let j = i; j < lines.length; j++) {
+            for (const ch of lines[j]) {
+              if (ch === '{') { methodBraces++; foundMethodOpen = true; }
+              if (ch === '}') { methodBraces--; }
+            }
+            if (foundMethodOpen && methodBraces <= 0) {
+              methodEndLine = j + 1;
+              break;
+            }
+          }
+          if (!foundMethodOpen) methodEndLine = Math.min(lineNum + 5, lines.length);
+          const methodContent = lines.slice(i, methodEndLine).join('\n');
+
           const methodNode: SuperNode = {
             id: methodNodeId,
             urn: `urn:supergraph:${repoId}:${filePath}#${currentClassNode.name}.${methodName}`,
@@ -299,8 +315,8 @@ export class AstExtractor {
               lamportClock,
               vectorClock: { substrate: lamportClock },
               layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
-              contentSha256: computeContentHash(line),
-              astStructuralHash: computeAstStructuralHash(line),
+              contentSha256: computeContentHash(methodContent),
+              astStructuralHash: computeAstStructuralHash(methodContent),
               semanticValidityHash: computeSemanticValidityHash({
                 name: methodName,
                 kind: 'method',
@@ -314,7 +330,7 @@ export class AstExtractor {
                 filePath,
                 startLine: lineNum,
                 startColumn: line.indexOf(methodName),
-                endLine: lineNum + 5,
+                endLine: methodEndLine,
                 endColumn: 1,
               },
               language: 'typescript',
@@ -357,6 +373,22 @@ export class AstExtractor {
         const isExported = line.includes('export');
         const isAsync = line.includes('async');
 
+        let fnEndLine = lineNum;
+        let fnBraces = 0;
+        let foundOpen = false;
+        for (let j = i; j < lines.length; j++) {
+          for (const ch of lines[j]) {
+            if (ch === '{') { fnBraces++; foundOpen = true; }
+            if (ch === '}') { fnBraces--; }
+          }
+          if (foundOpen && fnBraces <= 0) {
+            fnEndLine = j + 1;
+            break;
+          }
+        }
+        if (!foundOpen) fnEndLine = Math.min(lineNum + 5, lines.length);
+        const fnContent = lines.slice(i, fnEndLine).join('\n');
+
         const fnNode: SuperNode = {
           id: fnNodeId,
           urn: `urn:supergraph:${repoId}:${filePath}#${fnName}`,
@@ -368,8 +400,8 @@ export class AstExtractor {
             lamportClock,
             vectorClock: { substrate: lamportClock },
             layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
-            contentSha256: computeContentHash(line),
-            astStructuralHash: computeAstStructuralHash(line),
+            contentSha256: computeContentHash(fnContent),
+            astStructuralHash: computeAstStructuralHash(fnContent),
             semanticValidityHash: computeSemanticValidityHash({
               name: fnName,
               kind: 'function',
@@ -387,7 +419,7 @@ export class AstExtractor {
               filePath,
               startLine: lineNum,
               startColumn: line.indexOf(fnName),
-              endLine: lineNum + 5,
+              endLine: fnEndLine,
               endColumn: 1,
             },
             language: 'typescript',

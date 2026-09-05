@@ -1,0 +1,52 @@
+name: PR Blast Radius Audit
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  audit:
+    name: PigeonGraph Invariant Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Monorepo
+        run: npm run build
+
+      - name: Run Blast Radius Audit
+        id: audit
+        run: |
+          node packages/pigeongraph-mcp/dist/cli.js audit-pr --base origin/${{ github.base_ref }} > pr-audit-report.md
+          cat pr-audit-report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on Pull Request
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('pr-audit-report.md')) {
+              const report = fs.readFileSync('pr-audit-report.md', 'utf8');
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: report
+              });
+            }
