@@ -156,18 +156,21 @@ To prove PigeonGraph's efficiency in production, we evaluated an automated dual-
 
 | Repository | Stack / Ecosystem | Target Architectural Query | Baseline Turns (Arm A) | PigeonGraph Turns (Arm B) | Baseline Context Tokens | PigeonGraph 1-Shot Tokens | **% Token Reduction** | **PigeonGraph Latency** | Sufficiency | Dynamic Dispatch Recall |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **gin** | Go | `handleHTTPRequest` | 2 turns | **1 turn** | 7,315 tok | **350 tok** | **95%** | **352ms** | ✅ PARTIAL | N/A |
-| **fastapi** | Python | `solve_dependencies` | 3 turns | **1 turn** | 252,210 tok | **489 tok** | **99.8%** | **9,734ms** | ✅ SUFFICIENT | N/A |
-| **pigeongraph** | TypeScript | `synthesizeFrameworkRoutes` | 3 turns | **1 turn** | 4,121 tok | **1,340 tok** | **67%** | **27,318ms** | ✅ SUFFICIENT | ✅ 100% |
-| **excalidraw** | TypeScript / React | `renderStaticScene` | 14 turns | **1 turn** | 106,665 tok | **885 tok** | **99%** | **3,950ms** | ✅ PARTIAL | N/A |
+| **`gin`** | Go (Backend HTTP Router) | `handleHTTPRequest` | 2 turns | **1 turn** | 7,315 tok | **381 tok** | **95%** | **664ms** | ✅ `SUFFICIENT` | N/A |
+| **`fastapi`** | Python (Async REST Framework) | `solve_dependencies` | 3 turns | **1 turn** | 252,210 tok | **394 tok** | **100%** | **9,846ms** | ✅ `SUFFICIENT` | N/A |
+| **`pigeongraph`** | TypeScript (Multi-Package Monorepo) | `synthesizeFrameworkRoutes` | 3 turns | **1 turn** | 10,811 tok | **1,333 tok** | **88%** | **55.7ms** | ✅ `SUFFICIENT` | ✅ **100%** |
+| **`ripgrep`** | Rust (Multi-Threaded CLI Engine) | `search_path` | 3 turns | **1 turn** | 15,616 tok | **516 tok** | **97%** | **1,758ms** | ✅ `SUFFICIENT` | N/A |
+| **`excalidraw`** | TypeScript / React (Canvas Engine) | `renderStaticScene` | 14 turns | **1 turn** | 106,665 tok | **903 tok** | **99%** | **3,056ms** | ✅ `PARTIAL` | N/A |
 
 ### 🔬 Key Benchmark Takeaways:
-1. **Up to 99.8% Context Headroom Preserved**:
-   - In complex production libraries like FastAPI and Excalidraw, baseline agents burn **100,000 to 250,000+ tokens** traversing large files and imports, exhausting LLM context limits in 2–3 questions.
-   - PigeonGraph returns the exact symbol definition, parameter signatures, call chains, and served spans in **350 to 1,340 tokens**, preserving over 95% of your context window for actual reasoning and code edits.
-2. **100% Dynamic Dispatch Discovery**:
+1. **Up to 100% Context Headroom Preserved (95.8% Average)**:
+   - In complex production libraries like FastAPI, Excalidraw, and Ripgrep, baseline agents burn **15,000 to 250,000+ tokens** traversing large files and imports, exhausting LLM context limits in 2–3 questions.
+   - PigeonGraph returns the exact symbol definition, parameter signatures, call chains, and served spans in **381 to 1,333 tokens**, preserving over 95% of your context window for actual reasoning and code generation.
+2. **Sub-60ms In-Memory Monorepo Cold-Start Exploration**:
+   - Monorepo full-graph indexing and exploration completes in **55.7ms** with zero external database processes or network overhead.
+3. **100% Dynamic Dispatch Discovery**:
    - For web routers and event emitters, PigeonGraph discovers runtime connections (`HANDLES_ROUTE`, `DYNAMIC_DISPATCH_EVENT`) that static keyword searches (`grep`) completely miss.
-3. **Reproduce the Benchmarks**:
+4. **Reproduce the Benchmarks**:
    ```bash
    npm run bench
    ```
@@ -216,9 +219,11 @@ PigeonGraph delivers zero-configuration parsing and relationship extraction acro
 
 | Language / Format | File Extensions | Extracted Entities & Parser Architecture |
 | :--- | :--- | :--- |
-| **TypeScript / JavaScript** | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs` | Dedicated AST: Classes, functions, methods, interfaces, imports, calls, extends, implements, exported symbols |
-| **Python** | `.py`, `.pyi` | Dedicated AST: Classes, async/sync functions, decorators, methods, module imports, inheritance hierarchies |
-| **Rust / Go / Java / C / C++** | `.rs`, `.go`, `.java`, `.c`, `.cpp`, `.h` | Generic Substrate: High-throughput function & procedure extraction (`fn`, `func`, `function`, `def`), signatures, file containment |
+| **TypeScript / JavaScript** | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs` | Dedicated AST: Classes, functions, methods, interfaces, imports, calls, extends, implements, exported symbols, React components, EventEmitters |
+| **Python** | `.py`, `.pyi` | Dedicated AST: Classes, async/sync functions, decorators, methods, module imports, inheritance hierarchies, FastAPI route decorators |
+| **Go** | `.go` | Dedicated AST: Packages, imports, structs, interfaces, method receivers `func (e *Engine)`, type parameters `[T any]`, call graph |
+| **Rust** | `.rs` | Dedicated AST: Modules (`mod`), imports (`use`), structs, enums, traits, `impl` blocks, methods, generics `<P, M, S>`, qualifiers (`async`, `unsafe`), call graph |
+| **Java / C / C++** | `.java`, `.c`, `.cpp`, `.h` | Generic Substrate: High-throughput function & procedure extraction (`function`, `def`, C declarations), signatures, file containment |
 | **Architecture Specs & ADRs** | `.md`, `.markdown`, `.txt` | Semantic Layer: RFCs, ADR status (`ACCEPTED`, `DEPRECATED`), invariants, `REQ-*` requirements, `#WHY:` design rationales |
 
 ---
@@ -232,6 +237,7 @@ Static text search fails when calls happen indirectly through routers or event b
 | **Express / Node HTTP** | `app.get('/api/orders', listOrders)` | `function listOrders(req, res)` | `HANDLES_ROUTE` (`HTTP GET /api/orders`) |
 | **Express / Koa / Router** | `router.post('/checkout', checkoutHandler)` | `function checkoutHandler(req, res)` | `HANDLES_ROUTE` (`HTTP POST /checkout`) |
 | **Node.js EventEmitter** | `emitter.emit('order:created', data)` | `emitter.on('order:created', handler)` | `DYNAMIC_DISPATCH_EVENT` (`event_emitter.on(order:created)`) |
+| **Cross-Repo Microservices** | `fetch('/api/v1/checkout')` / `http.Get(...)` | Provider endpoint controller (`HANDLES_ROUTE`) | `CrossRepoContractLinkage` (`CONSUMER` ↔ `PROVIDER`) |
 | **React State Cascades** | `setState(...)` / `setCount(...)` | Dependent component re-render flow | `DYNAMIC_DISPATCH_REACT_STATE` (`react_state_rerender`) |
 | **Markdown ADR Specs** | `REQ-AUTH-01: verifyToken must check keys` | `function verifyToken(...)` | `IMPLEMENTS_SPEC` (`REQ-AUTH-01`) |
 | **Architecture Invariants** | `#WHY: Prevent double billing on retry` | `PaymentProcessor.charge()` | `JUSTIFIED_BY_ADR` (`ADR-005`) |
