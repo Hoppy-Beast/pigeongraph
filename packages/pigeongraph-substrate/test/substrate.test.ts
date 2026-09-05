@@ -258,6 +258,66 @@ describe('Substrate Layer Engine Tests', () => {
     assert.equal(routeEdge.edge.dispatchMechanism, 'HTTP GET /api/orders');
   });
 
+  test('DynamicDispatchSynthesizer links cross-repo microservice HTTP contracts', () => {
+    const fileContents = new Map<string, string>();
+
+    // Frontend Repo Node
+    const clientCode = `
+      export async function submitOrder(cartId: string) {
+        const res = await fetch('/api/v1/checkout', { method: 'POST' });
+        return res.json();
+      }
+    `;
+
+    // Backend Repo Route Node
+    const serverCode = `
+      app.post('/api/v1/checkout', checkoutHandler);
+      export async function checkoutHandler(req, res) {
+        res.json({ status: 'ok' });
+      }
+    `;
+
+    fileContents.set('frontend/src/api/cart.ts', clientCode);
+    fileContents.set('backend/src/routes/checkout.ts', serverCode);
+
+    const clientNodes = extractor.parseFile({
+      repoId: 'frontend-app',
+      filePath: 'frontend/src/api/cart.ts',
+      content: clientCode,
+      epoch: 1,
+      lamportClock: 1,
+    }).nodes;
+
+    const serverNodes = extractor.parseFile({
+      repoId: 'backend-api',
+      filePath: 'backend/src/routes/checkout.ts',
+      content: serverCode,
+      epoch: 1,
+      lamportClock: 1,
+    }).nodes;
+
+    const allNodes = [...clientNodes, ...serverNodes];
+    const { synthesizedEdges } = synthesizer.synthesize(allNodes, fileContents);
+
+    // Verify cross-repo contract edge was synthesized
+    const contractEdge = synthesizedEdges.find(
+      (e) => e.edge.dispatchMechanism?.includes('CROSS_REPO_HTTP') || e.edge.kind === 'HANDLES_ROUTE'
+    );
+    assert.ok(contractEdge, 'Should synthesize cross-repo HTTP contract edge');
+
+    // Verify contract linkage attached to caller node
+    const callerNode = clientNodes.find((n) => n.name === 'submitOrder')!;
+    assert.ok(callerNode.processFlow.crossRepoContracts.length > 0, 'Caller node should have cross-repo contract linkage');
+    assert.equal(callerNode.processFlow.crossRepoContracts[0].role, 'CONSUMER');
+    assert.equal(callerNode.processFlow.crossRepoContracts[0].protocol, 'REST_HTTP');
+    assert.equal(callerNode.processFlow.crossRepoContracts[0].complianceStatus, 'COMPLIANT');
+
+    // Verify contract linkage attached to handler node
+    const handlerNode = serverNodes.find((n) => n.name === 'checkoutHandler')!;
+    assert.ok(handlerNode.processFlow.crossRepoContracts.length > 0, 'Handler node should have cross-repo contract linkage');
+    assert.equal(handlerNode.processFlow.crossRepoContracts[0].role, 'PROVIDER');
+  });
+
   test('WebSocketStreamer broadcasts mutation delta frames to connected clients', async () => {
     const port = 5099;
     const streamer = new WebSocketStreamer({

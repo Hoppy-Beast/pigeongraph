@@ -19,6 +19,7 @@ export class DynamicDispatchSynthesizer {
     this.synthesizeEventEmitters(nodes, fileContents, synthesizedEdges);
     this.synthesizeFrameworkRoutes(nodes, fileContents, synthesizedEdges);
     this.synthesizeReactReRenders(nodes, fileContents, synthesizedEdges);
+    this.synthesizeCrossRepoContracts(nodes, fileContents, synthesizedEdges);
 
     return { synthesizedEdges };
   }
@@ -155,6 +156,135 @@ export class DynamicDispatchSynthesizer {
           };
           node.substrate.outgoingEdges.push(edge);
           results.push({ sourceId: node.id, targetId: renderNode.id, edge });
+        }
+      }
+    }
+  }
+
+  private synthesizeCrossRepoContracts(
+    nodes: SuperNode[],
+    fileContents: Map<string, string>,
+    results: Array<{ sourceId: string; targetId: string; edge: SubstrateEdge }>
+  ): void {
+    // 1. Identify all route handlers and their endpoints
+    interface RouteEndpoint {
+      handlerNode: SuperNode;
+      method: string;
+      path: string;
+    }
+
+    const routeEndpoints: RouteEndpoint[] = [];
+
+    for (const node of nodes) {
+      for (const edge of node.substrate.outgoingEdges) {
+        if (edge.kind === 'HANDLES_ROUTE' && edge.dispatchMechanism?.startsWith('HTTP ')) {
+          const parts = edge.dispatchMechanism.split(' ');
+          const method = parts[1]?.toUpperCase() ?? 'GET';
+          const path = parts[2] ?? '';
+          const targetNode = nodes.find((n) => n.id === edge.targetId);
+          if (targetNode) {
+            routeEndpoints.push({ handlerNode: targetNode, method, path });
+          }
+        }
+      }
+    }
+
+    // 2. Scan nodes for client HTTP calls (fetch, axios, http.Get/Post, requests)
+    const clientFetchRegex = /fetch\s*\(\s*['"`]([^'"`?#\s]+)['"`](?:[^)]*method\s*:\s*['"`]([A-Za-z]+)['"`])?/g;
+    const clientAxiosRegex = /axios\.(get|post|put|delete|patch)\s*\(\s*['"`]([^'"`?#\s]+)['"`]/g;
+    const clientHttpRegex = /http\.(Get|Post)\s*\(\s*['"`]([^'"`?#\s]+)['"`]/g;
+    const clientRequestsRegex = /(?:requests|httpx)\.(get|post|put|delete)\s*\(\s*['"`]([^'"`?#\s]+)['"`]/g;
+
+    for (const node of nodes) {
+      if (node.kind !== 'function' && node.kind !== 'method') continue;
+      const content = fileContents.get(node.substrate.sourceLocation.filePath);
+      if (!content) continue;
+
+      const detectedCalls: Array<{ path: string; method: string }> = [];
+
+      let match: RegExpExecArray | null;
+      while ((match = clientFetchRegex.exec(content)) !== null) {
+        detectedCalls.push({
+          path: match[1],
+          method: (match[2] ?? 'GET').toUpperCase(),
+        });
+      }
+
+      while ((match = clientAxiosRegex.exec(content)) !== null) {
+        detectedCalls.push({
+          path: match[2],
+          method: match[1].toUpperCase(),
+        });
+      }
+
+      while ((match = clientHttpRegex.exec(content)) !== null) {
+        detectedCalls.push({
+          path: match[2],
+          method: match[1].toUpperCase(),
+        });
+      }
+
+      while ((match = clientRequestsRegex.exec(content)) !== null) {
+        detectedCalls.push({
+          path: match[2],
+          method: match[1].toUpperCase(),
+        });
+      }
+
+      for (const call of detectedCalls) {
+        const matchedRoute = routeEndpoints.find(
+          (ep) =>
+            ep.path === call.path ||
+            ep.path === call.path.replace(/\/+$/, '') ||
+            call.path.startsWith(ep.path)
+        );
+
+        if (matchedRoute && matchedRoute.handlerNode.id !== node.id) {
+          const handlerNode = matchedRoute.handlerNode;
+
+          const edge: SubstrateEdge = {
+            targetId: handlerNode.id,
+            kind: 'HANDLES_ROUTE',
+            confidence: 'INFERRED',
+            confidenceScore: 0.9,
+            provenance: 'native-rust-synthesizer',
+            dispatchMechanism: `CROSS_REPO_HTTP ${call.method} ${call.path}`,
+          };
+
+          node.substrate.outgoingEdges.push(edge);
+          results.push({ sourceId: node.id, targetId: handlerNode.id, edge });
+
+          const contractId = `contract:${call.method.toLowerCase()}:${call.path.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+
+          // Attach consumer linkage
+          const hasConsumerLinkage = node.processFlow.crossRepoContracts.some(
+            (c) => c.contractId === contractId && c.role === 'CONSUMER'
+          );
+          if (!hasConsumerLinkage) {
+            node.processFlow.crossRepoContracts.push({
+              contractId,
+              role: 'CONSUMER',
+              protocol: 'REST_HTTP',
+              targetRepoUrn: handlerNode.urn,
+              targetSymbolUid: handlerNode.id,
+              complianceStatus: 'COMPLIANT',
+            });
+          }
+
+          // Attach provider linkage
+          const hasProviderLinkage = handlerNode.processFlow.crossRepoContracts.some(
+            (c) => c.contractId === contractId && c.role === 'PROVIDER'
+          );
+          if (!hasProviderLinkage) {
+            handlerNode.processFlow.crossRepoContracts.push({
+              contractId,
+              role: 'PROVIDER',
+              protocol: 'REST_HTTP',
+              targetRepoUrn: node.urn,
+              targetSymbolUid: node.id,
+              complianceStatus: 'COMPLIANT',
+            });
+          }
         }
       }
     }
