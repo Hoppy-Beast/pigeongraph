@@ -638,8 +638,8 @@ export class AstExtractor {
 
     const singleImportRegex = /^\s*import\s+(?:([a-zA-Z0-9_]+)\s+)?"([^"]+)"/;
     const typeStructRegex = /^\s*type\s+([a-zA-Z0-9_]+)\s+(struct|interface)/;
-    const methodReceiverRegex = /^\s*func\s*\(\s*(?:[a-zA-Z0-9_]+\s+)?\*?([a-zA-Z0-9_]+)\s*\)\s*([a-zA-Z0-9_]+)\s*\(([^)]*)\)/;
-    const functionRegex = /^\s*func\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/;
+    const methodReceiverRegex = /^\s*func\s*\(\s*(?:[a-zA-Z0-9_]+\s+)?\*?([a-zA-Z0-9_]+)(?:\[[^\]]+\])?\s*\)\s*([a-zA-Z0-9_]+)(?:\[[^\]]+\])?\s*\(([^)]*)\)/;
+    const functionRegex = /^\s*func\s+([a-zA-Z0-9_]+)(?:\[[^\]]+\])?\s*\(([^)]*)\)/;
 
     let inImportBlock = false;
     const structNodes = new Map<string, SuperNode>();
@@ -897,7 +897,7 @@ export class AstExtractor {
     const useRegex = /^\s*(?:pub\s+)?use\s+([^;]+);/;
     const typeRegex = /^\s*(?:pub(?:\([^)]+\))?\s+)?(struct|enum|trait)\s+([a-zA-Z0-9_]+)/;
     const implRegex = /^\s*impl(?:\s+<[^>]+>)?\s+(?:[a-zA-Z0-9_:]+\s+for\s+)?([a-zA-Z0-9_]+)/;
-    const fnRegex = /^\s*(?:pub(?:\([^)]+\))?\s+)?(?:async\s+)?fn\s+([a-zA-Z0-9_]+)\s*\(/;
+    const fnRegex = /^\s*(?:pub(?:\([^)]+\))?\s+)?(?:async\s+)?(?:const\s+)?(?:unsafe\s+)?(?:extern(?:\s+"[^"]+")?\s+)?fn\s+([a-zA-Z0-9_]+)(?:<[^>]+>)?\s*\(/;
 
     let currentImplStruct: string | null = null;
     let braceDepth = 0;

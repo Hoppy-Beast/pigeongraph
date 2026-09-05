@@ -70,6 +70,19 @@ async function main() {
     });
   }
 
+  // Add ripgrep (Rust) if present in eval-sandbox
+  const ripgrepPath = resolve('eval-sandbox', 'repos', 'ripgrep');
+  if (existsSync(ripgrepPath)) {
+    benchmarks.push({
+      name: 'ripgrep',
+      tier: 'medium',
+      language: 'Rust',
+      repoPath: ripgrepPath,
+      query: 'search_path',
+      description: 'Buffer searcher & multi-threaded line-matching engine',
+    });
+  }
+
   const reports: Array<{
     benchmark: BenchmarkRow;
     armA: ArmAResult;

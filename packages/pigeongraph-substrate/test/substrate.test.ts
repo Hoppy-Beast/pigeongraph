@@ -150,6 +150,10 @@ describe('Substrate Layer Engine Tests', () => {
         pub fn initialize(&mut self) {
           self.running = true;
         }
+
+        pub fn search_path<P, M, S>(&mut self, path: P) {
+          self.initialize();
+        }
       }
 
       pub fn boot_system() {
@@ -172,6 +176,10 @@ describe('Substrate Layer Engine Tests', () => {
     const newMethod = nodes.find((n) => n.kind === 'method' && n.name === 'new');
     assert.ok(newMethod, 'Should extract Engine::new impl method');
     assert.equal(newMethod.qualifiedName, 'Engine::new');
+
+    const searchPathMethod = nodes.find((n) => n.kind === 'method' && n.name === 'search_path');
+    assert.ok(searchPathMethod, 'Should extract generic Engine::search_path method');
+    assert.equal(searchPathMethod.qualifiedName, 'Engine::search_path');
 
     const bootFn = nodes.find((n) => n.kind === 'function' && n.name === 'boot_system');
     assert.ok(bootFn, 'Should extract pub fn boot_system');
