@@ -72,6 +72,118 @@ describe('Substrate Layer Engine Tests', () => {
     assert.ok(fnNode.versioning.semanticValidityHash.length === 64);
   });
 
+  test('AstExtractor parses Go structs, receiver methods, packages, and call graph', () => {
+    const goCode = `
+      package server
+
+      import (
+        "fmt"
+        "net/http"
+      )
+
+      type HttpServer struct {
+        port int
+      }
+
+      func (s *HttpServer) Start() error {
+        fmt.Println("Starting server")
+        s.handleRequests()
+        return nil
+      }
+
+      func (s *HttpServer) handleRequests() {
+      }
+
+      func NewServer(port int) *HttpServer {
+        server := &HttpServer{port: port}
+        server.Start()
+        return server
+      }
+    `;
+
+    const { nodes, edges } = extractor.parseFile({
+      repoId: 'test-go-repo',
+      filePath: 'pkg/server/server.go',
+      content: goCode,
+      epoch: 1,
+      lamportClock: 1,
+    });
+
+    const structNode = nodes.find((n) => n.kind === 'struct');
+    assert.ok(structNode, 'Should extract HttpServer struct');
+    assert.equal(structNode.name, 'HttpServer');
+
+    const startMethod = nodes.find((n) => n.kind === 'method' && n.name === 'Start');
+    assert.ok(startMethod, 'Should extract Start receiver method');
+    assert.equal(startMethod.qualifiedName, 'HttpServer.Start');
+
+    const newServerFn = nodes.find((n) => n.kind === 'function' && n.name === 'NewServer');
+    assert.ok(newServerFn, 'Should extract NewServer function');
+    assert.equal(newServerFn.processFlow.isEntryPoint, true, 'Exported Go func should be entry point');
+
+    // Check imports edge
+    const importEdges = edges.filter((e) => e.edge.kind === 'IMPORTS');
+    assert.ok(importEdges.length >= 2, 'Should extract Go imports');
+
+    // Check call edge
+    const callEdges = edges.filter((e) => e.edge.kind === 'CALLS');
+    assert.ok(callEdges.length >= 1, 'Should extract CALLS edges in Go');
+  });
+
+  test('AstExtractor parses Rust structs, impl blocks, methods, and call graph', () => {
+    const rustCode = `
+      mod config;
+      use std::sync::Arc;
+      use crate::config::Config;
+
+      pub struct Engine {
+        running: bool,
+      }
+
+      impl Engine {
+        pub fn new() -> Self {
+          let mut eng = Engine { running: false };
+          eng.initialize();
+          eng
+        }
+
+        pub fn initialize(&mut self) {
+          self.running = true;
+        }
+      }
+
+      pub fn boot_system() {
+        let eng = Engine::new();
+      }
+    `;
+
+    const { nodes, edges } = extractor.parseFile({
+      repoId: 'test-rust-repo',
+      filePath: 'src/engine.rs',
+      content: rustCode,
+      epoch: 1,
+      lamportClock: 1,
+    });
+
+    const structNode = nodes.find((n) => n.kind === 'struct');
+    assert.ok(structNode, 'Should extract Engine struct');
+    assert.equal(structNode.name, 'Engine');
+
+    const newMethod = nodes.find((n) => n.kind === 'method' && n.name === 'new');
+    assert.ok(newMethod, 'Should extract Engine::new impl method');
+    assert.equal(newMethod.qualifiedName, 'Engine::new');
+
+    const bootFn = nodes.find((n) => n.kind === 'function' && n.name === 'boot_system');
+    assert.ok(bootFn, 'Should extract pub fn boot_system');
+    assert.equal(bootFn.processFlow.isEntryPoint, true);
+
+    const importEdges = edges.filter((e) => e.edge.kind === 'IMPORTS');
+    assert.ok(importEdges.length >= 2, 'Should extract Rust use/mod imports');
+
+    const callEdges = edges.filter((e) => e.edge.kind === 'CALLS');
+    assert.ok(callEdges.length >= 1, 'Should extract CALLS edges in Rust');
+  });
+
   test('Database persists nodes and executes FTS5 full text search', () => {
     const tsCode = `
       export class PaymentProcessor {

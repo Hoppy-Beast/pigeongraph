@@ -93,6 +93,12 @@ export class AstExtractor {
       case 'python':
         this.parsePython(options, lines, fileNode, nodes, edges);
         break;
+      case 'go':
+        this.parseGo(options, lines, fileNode, nodes, edges);
+        break;
+      case 'rust':
+        this.parseRust(options, lines, fileNode, nodes, edges);
+        break;
       default:
         this.parseGeneric(options, lines, fileNode, nodes, edges);
         break;
@@ -550,6 +556,483 @@ export class AstExtractor {
         };
         fileNode.substrate.outgoingEdges.push({ targetId: fnNodeId, kind: 'CONTAINS', confidence: 'EXTRACTED', confidenceScore: 1.0, provenance: 'tree-sitter-ast' });
         nodes.push(fnNode);
+      }
+    }
+  }
+
+  private parseGo(
+    options: ParseOptions,
+    lines: string[],
+    fileNode: SuperNode,
+    nodes: SuperNode[],
+    edges: Array<{ sourceId: string; targetId: string; edge: SubstrateEdge }>
+  ): void {
+    const { repoId, filePath, epoch, lamportClock } = options;
+
+    const singleImportRegex = /^\s*import\s+(?:([a-zA-Z0-9_]+)\s+)?"([^"]+)"/;
+    const typeStructRegex = /^\s*type\s+([a-zA-Z0-9_]+)\s+(struct|interface)/;
+    const methodReceiverRegex = /^\s*func\s*\(\s*(?:[a-zA-Z0-9_]+\s+)?\*?([a-zA-Z0-9_]+)\s*\)\s*([a-zA-Z0-9_]+)\s*\(([^)]*)\)/;
+    const functionRegex = /^\s*func\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/;
+
+    let inImportBlock = false;
+    const structNodes = new Map<string, SuperNode>();
+    const funcNodes: Array<{ node: SuperNode; startLine: number; endLine: number }> = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      const lineNum = i + 1;
+
+      if (!trimmed || trimmed.startsWith('//')) continue;
+
+      if (trimmed === 'import (' || trimmed.startsWith('import (')) {
+        inImportBlock = true;
+        continue;
+      }
+      if (inImportBlock) {
+        if (trimmed === ')') {
+          inImportBlock = false;
+          continue;
+        }
+        const blockMatch = trimmed.match(/(?:([a-zA-Z0-9_]+)\s+)?"([^"]+)"/);
+        if (blockMatch) {
+          const importPath = blockMatch[2];
+          const edge: SubstrateEdge = {
+            targetId: `sg://${repoId}/${importPath}`,
+            kind: 'IMPORTS',
+            confidence: 'EXTRACTED',
+            confidenceScore: 1.0,
+            provenance: 'tree-sitter-ast',
+            location: { filePath, startLine: lineNum, startColumn: 0, endLine: lineNum, endColumn: line.length },
+          };
+          fileNode.substrate.outgoingEdges.push(edge);
+          edges.push({ sourceId: fileNode.id, targetId: edge.targetId, edge });
+        }
+        continue;
+      }
+
+      const singleImportMatch = trimmed.match(singleImportRegex);
+      if (singleImportMatch) {
+        const importPath = singleImportMatch[2];
+        const edge: SubstrateEdge = {
+          targetId: `sg://${repoId}/${importPath}`,
+          kind: 'IMPORTS',
+          confidence: 'EXTRACTED',
+          confidenceScore: 1.0,
+          provenance: 'tree-sitter-ast',
+          location: { filePath, startLine: lineNum, startColumn: 0, endLine: lineNum, endColumn: line.length },
+        };
+        fileNode.substrate.outgoingEdges.push(edge);
+        edges.push({ sourceId: fileNode.id, targetId: edge.targetId, edge });
+        continue;
+      }
+
+      // Struct / Interface
+      const typeMatch = trimmed.match(typeStructRegex);
+      if (typeMatch) {
+        const typeName = typeMatch[1];
+        const kind = typeMatch[2] === 'struct' ? ('struct' as const) : ('interface' as const);
+        const nodeId = `sg://${repoId}/${filePath}#${typeName}`;
+        const isExported = /^[A-Z]/.test(typeName);
+
+        const typeNode: SuperNode = {
+          id: nodeId,
+          urn: `urn:supergraph:${repoId}:${filePath}#${typeName}`,
+          kind,
+          name: typeName,
+          qualifiedName: typeName,
+          repoId,
+          versioning: {
+            lamportClock,
+            vectorClock: { substrate: lamportClock },
+            layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
+            contentSha256: computeContentHash(line),
+            astStructuralHash: computeAstStructuralHash(line),
+            semanticValidityHash: computeSemanticValidityHash({ name: typeName, kind }),
+            lastModifiedTimestampMs: Date.now(),
+          },
+          substrate: {
+            sourceLocation: { filePath, startLine: lineNum, startColumn: line.indexOf(typeName), endLine: lineNum + 10, endColumn: 1 },
+            language: 'go',
+            symbolSignature: line.trim(),
+            visibility: isExported ? 'public' : 'internal',
+            outgoingEdges: [],
+            astEpochTimestamp: new Date().toISOString(),
+          },
+          semantic: { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+          processFlow: { isEntryPoint: false, entryPointScore: 0, processFlowSequences: [], crossRepoContracts: [] },
+        };
+
+        structNodes.set(typeName, typeNode);
+        fileNode.substrate.outgoingEdges.push({
+          targetId: nodeId,
+          kind: 'CONTAINS',
+          confidence: 'EXTRACTED',
+          confidenceScore: 1.0,
+          provenance: 'tree-sitter-ast',
+        });
+        nodes.push(typeNode);
+        continue;
+      }
+
+      // Method Receiver
+      const methodMatch = line.match(methodReceiverRegex);
+      if (methodMatch) {
+        const receiverType = methodMatch[1];
+        const methodName = methodMatch[2];
+        const paramsRaw = methodMatch[3];
+        const qname = `${receiverType}.${methodName}`;
+        const nodeId = `sg://${repoId}/${filePath}#${qname}`;
+        const isExported = /^[A-Z]/.test(methodName);
+
+        const methodNode: SuperNode = {
+          id: nodeId,
+          urn: `urn:supergraph:${repoId}:${filePath}#${qname}`,
+          kind: 'method',
+          name: methodName,
+          qualifiedName: qname,
+          repoId,
+          versioning: {
+            lamportClock,
+            vectorClock: { substrate: lamportClock },
+            layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
+            contentSha256: computeContentHash(line),
+            astStructuralHash: computeAstStructuralHash(line),
+            semanticValidityHash: computeSemanticValidityHash({ name: methodName, kind: 'method', signature: line.trim() }),
+            lastModifiedTimestampMs: Date.now(),
+          },
+          substrate: {
+            sourceLocation: { filePath, startLine: lineNum, startColumn: line.indexOf(methodName), endLine: lineNum + 8, endColumn: 1 },
+            language: 'go',
+            symbolSignature: line.trim(),
+            visibility: isExported ? 'public' : 'internal',
+            outgoingEdges: [],
+            astEpochTimestamp: new Date().toISOString(),
+          },
+          semantic: { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+          processFlow: { isEntryPoint: isExported, entryPointScore: isExported ? 0.7 : 0.2, processFlowSequences: [], crossRepoContracts: [] },
+        };
+
+        const parentStruct = structNodes.get(receiverType);
+        if (parentStruct) {
+          parentStruct.substrate.outgoingEdges.push({
+            targetId: nodeId,
+            kind: 'CONTAINS',
+            confidence: 'EXTRACTED',
+            confidenceScore: 1.0,
+            provenance: 'tree-sitter-ast',
+          });
+        }
+        fileNode.substrate.outgoingEdges.push({
+          targetId: nodeId,
+          kind: 'CONTAINS',
+          confidence: 'EXTRACTED',
+          confidenceScore: 1.0,
+          provenance: 'tree-sitter-ast',
+        });
+        nodes.push(methodNode);
+        funcNodes.push({ node: methodNode, startLine: lineNum, endLine: Math.min(lineNum + 15, lines.length) });
+        continue;
+      }
+
+      // Standalone Function
+      const fnMatch = line.match(functionRegex);
+      if (fnMatch) {
+        const fnName = fnMatch[1];
+        const paramsRaw = fnMatch[2];
+        const nodeId = `sg://${repoId}/${filePath}#${fnName}`;
+        const isExported = /^[A-Z]/.test(fnName);
+
+        const fnNode: SuperNode = {
+          id: nodeId,
+          urn: `urn:supergraph:${repoId}:${filePath}#${fnName}`,
+          kind: 'function',
+          name: fnName,
+          qualifiedName: fnName,
+          repoId,
+          versioning: {
+            lamportClock,
+            vectorClock: { substrate: lamportClock },
+            layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
+            contentSha256: computeContentHash(line),
+            astStructuralHash: computeAstStructuralHash(line),
+            semanticValidityHash: computeSemanticValidityHash({ name: fnName, kind: 'function', signature: line.trim() }),
+            lastModifiedTimestampMs: Date.now(),
+          },
+          substrate: {
+            sourceLocation: { filePath, startLine: lineNum, startColumn: line.indexOf(fnName), endLine: lineNum + 8, endColumn: 1 },
+            language: 'go',
+            symbolSignature: line.trim(),
+            visibility: isExported ? 'public' : 'internal',
+            outgoingEdges: [],
+            astEpochTimestamp: new Date().toISOString(),
+          },
+          semantic: { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+          processFlow: { isEntryPoint: isExported, entryPointScore: isExported ? 0.8 : 0.2, processFlowSequences: [], crossRepoContracts: [] },
+        };
+
+        fileNode.substrate.outgoingEdges.push({
+          targetId: nodeId,
+          kind: 'CONTAINS',
+          confidence: 'EXTRACTED',
+          confidenceScore: 1.0,
+          provenance: 'tree-sitter-ast',
+        });
+        nodes.push(fnNode);
+        funcNodes.push({ node: fnNode, startLine: lineNum, endLine: Math.min(lineNum + 15, lines.length) });
+        continue;
+      }
+    }
+
+    // Call Resolution Pass in Go
+    const callRegex = /(?:([a-zA-Z0-9_]+)\.)?([a-zA-Z0-9_]+)\s*\(/g;
+    for (const { node, startLine, endLine } of funcNodes) {
+      const bodyLines = lines.slice(startLine, endLine);
+      for (const bodyLine of bodyLines) {
+        let match: RegExpExecArray | null;
+        while ((match = callRegex.exec(bodyLine)) !== null) {
+          const calledName = match[2];
+          if (calledName === 'func' || calledName === 'if' || calledName === 'for' || calledName === 'switch' || calledName === 'return') continue;
+          if (calledName === node.name) continue;
+
+          const callee = nodes.find(
+            (n) => (n.kind === 'function' || n.kind === 'method') && (n.name === calledName || n.qualifiedName.endsWith(`.${calledName}`))
+          );
+          if (callee && callee.id !== node.id) {
+            const alreadyHas = node.substrate.outgoingEdges.some((e) => e.targetId === callee.id && e.kind === 'CALLS');
+            if (!alreadyHas) {
+              const callEdge: SubstrateEdge = {
+                targetId: callee.id,
+                kind: 'CALLS',
+                confidence: 'EXTRACTED',
+                confidenceScore: 1.0,
+                provenance: 'tree-sitter-ast',
+              };
+              node.substrate.outgoingEdges.push(callEdge);
+              edges.push({ sourceId: node.id, targetId: callee.id, edge: callEdge });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private parseRust(
+    options: ParseOptions,
+    lines: string[],
+    fileNode: SuperNode,
+    nodes: SuperNode[],
+    edges: Array<{ sourceId: string; targetId: string; edge: SubstrateEdge }>
+  ): void {
+    const { repoId, filePath, epoch, lamportClock } = options;
+
+    const modRegex = /^\s*(?:pub\s+)?mod\s+([a-zA-Z0-9_]+);/;
+    const useRegex = /^\s*(?:pub\s+)?use\s+([^;]+);/;
+    const typeRegex = /^\s*(?:pub(?:\([^)]+\))?\s+)?(struct|enum|trait)\s+([a-zA-Z0-9_]+)/;
+    const implRegex = /^\s*impl(?:\s+<[^>]+>)?\s+(?:[a-zA-Z0-9_:]+\s+for\s+)?([a-zA-Z0-9_]+)/;
+    const fnRegex = /^\s*(?:pub(?:\([^)]+\))?\s+)?(?:async\s+)?fn\s+([a-zA-Z0-9_]+)\s*\(/;
+
+    let currentImplStruct: string | null = null;
+    let braceDepth = 0;
+    let implBraceDepth = 0;
+    const structNodes = new Map<string, SuperNode>();
+    const funcNodes: Array<{ node: SuperNode; startLine: number; endLine: number }> = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      const lineNum = i + 1;
+
+      for (const ch of line) {
+        if (ch === '{') braceDepth++;
+        if (ch === '}') braceDepth--;
+      }
+
+      if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*')) continue;
+
+      if (currentImplStruct && braceDepth < implBraceDepth) {
+        currentImplStruct = null;
+      }
+
+      // mod declaration
+      const modMatch = trimmed.match(modRegex);
+      if (modMatch) {
+        const modName = modMatch[1];
+        const edge: SubstrateEdge = {
+          targetId: `sg://${repoId}/${modName}`,
+          kind: 'IMPORTS',
+          confidence: 'EXTRACTED',
+          confidenceScore: 1.0,
+          provenance: 'tree-sitter-ast',
+        };
+        fileNode.substrate.outgoingEdges.push(edge);
+        edges.push({ sourceId: fileNode.id, targetId: edge.targetId, edge });
+        continue;
+      }
+
+      // use statement
+      const useMatch = trimmed.match(useRegex);
+      if (useMatch) {
+        const usePath = useMatch[1].trim();
+        const edge: SubstrateEdge = {
+          targetId: `sg://${repoId}/${usePath}`,
+          kind: 'IMPORTS',
+          confidence: 'EXTRACTED',
+          confidenceScore: 1.0,
+          provenance: 'tree-sitter-ast',
+        };
+        fileNode.substrate.outgoingEdges.push(edge);
+        edges.push({ sourceId: fileNode.id, targetId: edge.targetId, edge });
+        continue;
+      }
+
+      // struct / enum / trait
+      const typeMatch = trimmed.match(typeRegex);
+      if (typeMatch) {
+        const kindStr = typeMatch[1];
+        const typeName = typeMatch[2];
+        const kind = kindStr === 'struct' ? ('struct' as const) : kindStr === 'enum' ? ('enum' as const) : ('trait' as const);
+        const nodeId = `sg://${repoId}/${filePath}#${typeName}`;
+        const isPub = trimmed.startsWith('pub');
+
+        const typeNode: SuperNode = {
+          id: nodeId,
+          urn: `urn:supergraph:${repoId}:${filePath}#${typeName}`,
+          kind,
+          name: typeName,
+          qualifiedName: typeName,
+          repoId,
+          versioning: {
+            lamportClock,
+            vectorClock: { substrate: lamportClock },
+            layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
+            contentSha256: computeContentHash(line),
+            astStructuralHash: computeAstStructuralHash(line),
+            semanticValidityHash: computeSemanticValidityHash({ name: typeName, kind }),
+            lastModifiedTimestampMs: Date.now(),
+          },
+          substrate: {
+            sourceLocation: { filePath, startLine: lineNum, startColumn: line.indexOf(typeName), endLine: lineNum + 8, endColumn: 1 },
+            language: 'rust',
+            symbolSignature: line.trim(),
+            visibility: isPub ? 'public' : 'internal',
+            outgoingEdges: [],
+            astEpochTimestamp: new Date().toISOString(),
+          },
+          semantic: { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+          processFlow: { isEntryPoint: false, entryPointScore: 0, processFlowSequences: [], crossRepoContracts: [] },
+        };
+
+        structNodes.set(typeName, typeNode);
+        fileNode.substrate.outgoingEdges.push({
+          targetId: nodeId,
+          kind: 'CONTAINS',
+          confidence: 'EXTRACTED',
+          confidenceScore: 1.0,
+          provenance: 'tree-sitter-ast',
+        });
+        nodes.push(typeNode);
+        continue;
+      }
+
+      // impl block
+      const implMatch = trimmed.match(implRegex);
+      if (implMatch) {
+        currentImplStruct = implMatch[1];
+        implBraceDepth = braceDepth;
+        continue;
+      }
+
+      // fn declaration (method or standalone function)
+      const fnMatch = line.match(fnRegex);
+      if (fnMatch) {
+        const fnName = fnMatch[1];
+        const isPub = trimmed.startsWith('pub');
+        const qname = currentImplStruct ? `${currentImplStruct}::${fnName}` : fnName;
+        const nodeId = `sg://${repoId}/${filePath}#${qname}`;
+
+        const fnNode: SuperNode = {
+          id: nodeId,
+          urn: `urn:supergraph:${repoId}:${filePath}#${qname}`,
+          kind: currentImplStruct ? 'method' : 'function',
+          name: fnName,
+          qualifiedName: qname,
+          repoId,
+          versioning: {
+            lamportClock,
+            vectorClock: { substrate: lamportClock },
+            layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
+            contentSha256: computeContentHash(line),
+            astStructuralHash: computeAstStructuralHash(line),
+            semanticValidityHash: computeSemanticValidityHash({ name: fnName, kind: currentImplStruct ? 'method' : 'function', signature: line.trim() }),
+            lastModifiedTimestampMs: Date.now(),
+          },
+          substrate: {
+            sourceLocation: { filePath, startLine: lineNum, startColumn: line.indexOf(fnName), endLine: lineNum + 8, endColumn: 1 },
+            language: 'rust',
+            symbolSignature: line.trim(),
+            visibility: isPub ? 'public' : 'internal',
+            outgoingEdges: [],
+            astEpochTimestamp: new Date().toISOString(),
+          },
+          semantic: { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+          processFlow: { isEntryPoint: isPub, entryPointScore: isPub ? 0.8 : 0.2, processFlowSequences: [], crossRepoContracts: [] },
+        };
+
+        if (currentImplStruct) {
+          const parentStruct = structNodes.get(currentImplStruct);
+          if (parentStruct) {
+            parentStruct.substrate.outgoingEdges.push({
+              targetId: nodeId,
+              kind: 'CONTAINS',
+              confidence: 'EXTRACTED',
+              confidenceScore: 1.0,
+              provenance: 'tree-sitter-ast',
+            });
+          }
+        }
+        fileNode.substrate.outgoingEdges.push({
+          targetId: nodeId,
+          kind: 'CONTAINS',
+          confidence: 'EXTRACTED',
+          confidenceScore: 1.0,
+          provenance: 'tree-sitter-ast',
+        });
+        nodes.push(fnNode);
+        funcNodes.push({ node: fnNode, startLine: lineNum, endLine: Math.min(lineNum + 15, lines.length) });
+        continue;
+      }
+    }
+
+    // Call Resolution Pass in Rust
+    const callRegex = /(?:([a-zA-Z0-9_]+)(?:::|\.))?([a-zA-Z0-9_]+)\s*\(/g;
+    for (const { node, startLine, endLine } of funcNodes) {
+      const bodyLines = lines.slice(startLine, endLine);
+      for (const bodyLine of bodyLines) {
+        let match: RegExpExecArray | null;
+        while ((match = callRegex.exec(bodyLine)) !== null) {
+          const calledName = match[2];
+          if (calledName === 'fn' || calledName === 'if' || calledName === 'match' || calledName === 'for' || calledName === 'while' || calledName === 'println') continue;
+          if (calledName === node.name) continue;
+
+          const callee = nodes.find(
+            (n) => (n.kind === 'function' || n.kind === 'method') && (n.name === calledName || n.qualifiedName.endsWith(`::${calledName}`))
+          );
+          if (callee && callee.id !== node.id) {
+            const alreadyHas = node.substrate.outgoingEdges.some((e) => e.targetId === callee.id && e.kind === 'CALLS');
+            if (!alreadyHas) {
+              const callEdge: SubstrateEdge = {
+                targetId: callee.id,
+                kind: 'CALLS',
+                confidence: 'EXTRACTED',
+                confidenceScore: 1.0,
+                provenance: 'tree-sitter-ast',
+              };
+              node.substrate.outgoingEdges.push(callEdge);
+              edges.push({ sourceId: node.id, targetId: callee.id, edge: callEdge });
+            }
+          }
+        }
       }
     }
   }
