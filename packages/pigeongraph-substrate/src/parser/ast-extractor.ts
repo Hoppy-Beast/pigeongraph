@@ -269,20 +269,54 @@ export class AstExtractor {
       }
 
       // Method inside Class
-      if (currentClassNode && trimmed.includes('(') && !trimmed.startsWith('if') && !trimmed.startsWith('for') && !trimmed.startsWith('while') && !trimmed.startsWith('switch') && !trimmed.startsWith('catch')) {
+      if (
+        currentClassNode &&
+        braceDepth <= classBraceDepth + 1 &&
+        trimmed.includes('(') &&
+        !trimmed.startsWith('if') &&
+        !trimmed.startsWith('for') &&
+        !trimmed.startsWith('while') &&
+        !trimmed.startsWith('switch') &&
+        !trimmed.startsWith('catch') &&
+        !trimmed.startsWith('return') &&
+        !trimmed.startsWith('throw') &&
+        !trimmed.startsWith('const') &&
+        !trimmed.startsWith('let') &&
+        !trimmed.startsWith('var') &&
+        !trimmed.startsWith('case') &&
+        !trimmed.startsWith('await') &&
+        !trimmed.startsWith('yield')
+      ) {
         const parenIdx = trimmed.indexOf('(');
         const beforeParen = trimmed.substring(0, parenIdx).trim();
-        const tokens = beforeParen.split(/\s+/);
-        const methodName = tokens[tokens.length - 1];
 
-        if (methodName && /^[a-zA-Z0-9_$]+$/.test(methodName) && methodName !== 'function' && methodName !== 'constructor' && methodName !== 'if' && methodName !== 'for') {
-          const afterParen = trimmed.substring(parenIdx + 1);
-          const closeParenIdx = afterParen.indexOf(')');
-          const paramsRaw = closeParenIdx !== -1 ? afterParen.substring(0, closeParenIdx) : '';
-          const afterClose = closeParenIdx !== -1 ? afterParen.substring(closeParenIdx + 1).trim() : '';
-          const returnType = afterClose.startsWith(':') ? afterClose.substring(1).replace(/[{;].*$/, '').trim() : undefined;
+        if (
+          !beforeParen.includes('.') &&
+          !beforeParen.includes(':') &&
+          !beforeParen.includes('=') &&
+          !beforeParen.includes('"') &&
+          !beforeParen.includes("'") &&
+          !beforeParen.includes('`')
+        ) {
+          const tokens = beforeParen.split(/\s+/);
+          const methodName = tokens[tokens.length - 1];
 
-          const methodNodeId = `sg://${repoId}/${filePath}#${currentClassNode.name}.${methodName}`;
+          if (
+            methodName &&
+            /^[a-zA-Z0-9_$]+$/.test(methodName) &&
+            methodName !== 'function' &&
+            methodName !== 'constructor' &&
+            methodName !== 'if' &&
+            methodName !== 'for' &&
+            methodName !== 'new'
+          ) {
+            const afterParen = trimmed.substring(parenIdx + 1);
+            const closeParenIdx = afterParen.indexOf(')');
+            const paramsRaw = closeParenIdx !== -1 ? afterParen.substring(0, closeParenIdx) : '';
+            const afterClose = closeParenIdx !== -1 ? afterParen.substring(closeParenIdx + 1).trim() : '';
+            const returnType = afterClose.startsWith(':') ? afterClose.substring(1).replace(/[{;].*$/, '').trim() : undefined;
+
+            const methodNodeId = `sg://${repoId}/${filePath}#${currentClassNode.name}.${methodName}`;
           const isPrivate = tokens.includes('private');
           const isProtected = tokens.includes('protected');
           const isStatic = tokens.includes('static');
@@ -361,6 +395,7 @@ export class AstExtractor {
           continue;
         }
       }
+    }
 
       // Top-level Function or Arrow Function
       const fnMatch = line.match(functionRegex) ?? line.match(arrowFnRegex);

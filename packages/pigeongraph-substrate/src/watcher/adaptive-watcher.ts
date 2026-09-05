@@ -44,7 +44,47 @@ export class AdaptiveWatcher {
     this.burstDebounceMs = options.burstDebounceMs ?? 1500;
   }
 
-  public start(): void {
+  public async scanProject(targetDir = this.projectRoot): Promise<void> {
+    const { readdir } = await import('node:fs/promises');
+    const { join, relative } = await import('node:path');
+
+    const scan = async (dir: string) => {
+      try {
+        const entries = await readdir(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const name = entry.name;
+          if (
+            name.startsWith('.') ||
+            name === 'node_modules' ||
+            name === 'dist' ||
+            name === 'build' ||
+            name === 'target' ||
+            name === 'eval-sandbox'
+          ) {
+            continue;
+          }
+          const full = join(dir, name);
+          if (entry.isDirectory()) {
+            await scan(full);
+          } else if (entry.isFile()) {
+            if (name.match(/\.(ts|tsx|js|jsx|py|go|rs|java|c|cpp|md)$/i)) {
+              const rel = relative(this.projectRoot, full).replace(/\\/g, '/');
+              this.pendingFiles.add(rel);
+            }
+          }
+        }
+      } catch {
+        // ignore unreadable directory
+      }
+    };
+
+    await scan(targetDir);
+    await this.flushPendingBatch();
+  }
+
+  public async start(): Promise<void> {
+    await this.scanProject();
+
     this.fsWatcher = watch(this.projectRoot, { recursive: true }, (_eventType, filename) => {
       if (!filename) return;
       const normalizedPath = filename.replace(/\\/g, '/');
@@ -54,7 +94,8 @@ export class AdaptiveWatcher {
         normalizedPath.includes('.git/') ||
         normalizedPath.includes('node_modules/') ||
         normalizedPath.includes('/dist/') ||
-        normalizedPath.includes('.temp')
+        normalizedPath.includes('.temp') ||
+        normalizedPath.includes('eval-sandbox/')
       ) {
         return;
       }

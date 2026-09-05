@@ -57,7 +57,7 @@ async function main() {
       process.exit(1);
     }
     const daemon = new SubstrateDaemon(daemonOptions);
-    await daemon.watcher.flushPendingBatch();
+    await daemon.watcher.scanProject();
 
     const server = new SuperGraphMcpServer({ projectRoot, repoId, daemon });
     const result = server.handleToolCall('pigeongraph_explore', { query });
