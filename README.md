@@ -452,7 +452,29 @@ Traces the shortest directed execution path between two symbols across modules a
 | :--- | :--- |
 | `pigeongraph serve-mcp` | Starts stdio JSON-RPC 2.0 Model Context Protocol (MCP) server |
 | `pigeongraph explore <query>` | Answers architectural query in 1 shot, printing JSON result to stdout |
+| `pigeongraph ui [--port 5052]` | Launches zero-dependency live in-browser architecture visualizer with real-time WebSocket diffs |
+| `pigeongraph audit-pr [--base <ref>]` | Evaluates PR changed files against base ref using `H_semantic_inv` to compute blast radius |
 | `pigeongraph help` | Displays CLI version and available command flags |
+
+### Reusable GitHub Action (`pigeongraph-action`)
+
+Automate breaking change detection on GitHub PRs using `.github/actions/blast-radius`:
+```yaml
+name: PR Blast Radius Audit
+on: [pull_request]
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22.x }
+      - run: npm ci && npm run build
+      - uses: ./.github/actions/blast-radius
+        with:
+          base_ref: origin/${{ github.base_ref }}
+```
 
 ### Environment Variables
 
