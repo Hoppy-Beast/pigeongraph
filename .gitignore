@@ -42,3 +42,7 @@ GEMINI.md
 coverage/
 .nyc_output/
 *.lcov
+
+# Evaluation Sandbox & Temporary Clones
+eval-sandbox/
+
