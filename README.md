@@ -1,110 +1,109 @@
 # 🐦 PigeonGraph
 
-> **The Unified Multi-Layer Code Knowledge Graph for AI Coding Agents**  
-> *Sub-100ms filesystem monitoring, dynamic dispatch synthesis, and 1-shot exploration with **96%+ token reduction**.*
+> A multi-layer code knowledge graph and Model Context Protocol (MCP) server for AI coding agents.  
+> Local file monitoring, dynamic dispatch synthesis, and single-turn exploration with 96%+ token reduction.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/Hoppy-Beast/pigeongraph/actions/workflows/ci.yml/badge.svg)](https://github.com/Hoppy-Beast/pigeongraph/actions)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D22.5.0-brightgreen)](https://nodejs.org)
 [![MCP Protocol](https://img.shields.io/badge/MCP-2024--11--05-orange)](https://modelcontextprotocol.io)
 
-[![Windows](https://img.shields.io/badge/Windows-supported-blue.svg)](#-quickstart--1-command-setup)
-[![macOS](https://img.shields.io/badge/macOS-supported-blue.svg)](#-quickstart--1-command-setup)
-[![Linux](https://img.shields.io/badge/Linux-supported-blue.svg)](#-quickstart--1-command-setup)
+[![Windows](https://img.shields.io/badge/Windows-supported-blue.svg)](#quickstart-and-setup)
+[![macOS](https://img.shields.io/badge/macOS-supported-blue.svg)](#quickstart-and-setup)
+[![Linux](https://img.shields.io/badge/Linux-supported-blue.svg)](#quickstart-and-setup)
 
-[![Google Antigravity](https://img.shields.io/badge/Google_Antigravity-supported-blueviolet.svg)](#-agent-setup--mcp-integrations)
-[![Claude Code](https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg)](#-agent-setup--mcp-integrations)
-[![Cursor](https://img.shields.io/badge/Cursor-supported-blueviolet.svg)](#-agent-setup--mcp-integrations)
-[![Gemini](https://img.shields.io/badge/Gemini_CLI-supported-blueviolet.svg)](#-agent-setup--mcp-integrations)
-[![GitHub Copilot](https://img.shields.io/badge/GitHub_Copilot-supported-blueviolet.svg)](#-agent-setup--mcp-integrations)
+[![Google Antigravity](https://img.shields.io/badge/Google_Antigravity-supported-blueviolet.svg)](#agent-setup-and-mcp-integrations)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg)](#agent-setup-and-mcp-integrations)
+[![Cursor](https://img.shields.io/badge/Cursor-supported-blueviolet.svg)](#agent-setup-and-mcp-integrations)
+[![Gemini](https://img.shields.io/badge/Gemini_CLI-supported-blueviolet.svg)](#agent-setup-and-mcp-integrations)
+[![GitHub Copilot](https://img.shields.io/badge/GitHub_Copilot-supported-blueviolet.svg)](#agent-setup-and-mcp-integrations)
 
-**Author & Creator:** [MD. Mahinur Rahman Prachurza (Hoppy-Beast)](https://github.com/Hoppy-Beast)  
-**Community & Directives:** [AGENTS.md](AGENTS.md) • [Contributing Guide](contribute/CONTRIBUTING.md) • [Code of Conduct](contribute/CODE_OF_CONDUCT.md) • [Security Policy](contribute/SECURITY.md)
-
----
-
-### 👋 Welcome to PigeonGraph!
-
-Whether you are an engineer building systems from scratch, refactoring complex monorepos, or pairing with cutting-edge AI coding agents like **Claude Code**, **Google Antigravity**, **Cursor**, **Gemini**, or **GitHub Copilot**—we are thrilled to welcome you to PigeonGraph.
-
-Software development today moves faster than ever, and codebases have evolved into rich, living ecosystems of functions, classes, API routes, and asynchronous event streams. But when AI agents try to explore large projects with brute-force grep and whole-file reads, they hit a wall: 15-turn search loops, tens of thousands of wasted tokens, stale interface assumptions, and lost context.
-
-**PigeonGraph bridges this gap.** By combining sub-100ms local filesystem monitoring, dynamic runtime dispatch synthesis, zero-dependency SQLite storage, and a lightning-fast in-memory graph, PigeonGraph answers architectural questions in **a single, sub-millisecond turn** with **96%+ token reduction**.
-
-PigeonGraph is built with kindness, precision, and deep respect for the open-source community. It runs 100% offline with zero telemetry, zero proprietary binary locks, and a clean-room MIT license. We hope it makes your coding journey smoother, faster, and more fun!
+**Author:** [MD. Mahinur Rahman Prachurza (Hoppy-Beast)](https://github.com/Hoppy-Beast)  
+**Contributing and policies:** [AGENTS.md](AGENTS.md) • [Contributing Guide](contribute/CONTRIBUTING.md) • [Code of Conduct](contribute/CODE_OF_CONDUCT.md) • [Security Policy](contribute/SECURITY.md)
 
 ---
 
-## 📑 Contents
+### Welcome
 
-1. [⚡ Quickstart & 1-Command Setup](#-quickstart--1-command-setup) *(Install, init, and run in 30 seconds)*
-2. [🎯 1-Shot Agent Experience](#-1-shot-agent-experience) *(See real CLI & MCP output)*
-3. [⚔️ Comparative Feature Matrix](#-comparative-feature-matrix) *(PigeonGraph vs. CodeGraph vs. Graphify vs. GitNexus)*
-4. [🤖 Agent Setup & MCP Integrations](#-agent-setup--mcp-integrations) *(1-command auto-install & templates)*
-5. [🌐 Supported Languages & Dynamic Dispatch](#-supported-languages--dynamic-dispatch) *(Go, Rust, Python, TS, Microservices)*
-6. [🖥️ Live Canvas Visualizer & PR Blast Radius](#-live-canvas-visualizer--pr-blast-radius) *(`pigeongraph ui` & `audit-pr`)*
-7. [🏗️ Architecture & Core Engine](#-architecture--core-engine) *(Tri-Layer SuperNode, SQLite WAL, Dual-Buffer)*
-8. [🛡️ Enterprise Security & Prompt Injection Defense](#-enterprise-security--prompt-injection-defense)
-9. [💻 CLI & Reusable GitHub Action Reference](#-cli--reusable-github-action-reference)
-10. [📊 Empirical Benchmarks & Token Reduction](#-empirical-benchmarks--token-reduction) *(8 production repos tested)*
-11. [📦 Monorepo Packages](#-monorepo-packages)
-12. [❓ Troubleshooting & FAQ](#-troubleshooting--faq)
-13. [🤝 Contributing Your Ideas & Solutions with `AGENTS.md`](#-contributing-your-ideas--solutions-with-agentsmd)
-14. [📜 License & Attribution](#-license--attribution)
+PigeonGraph is an open source tool built for developers and coding agents working on large codebases.
+
+When agents such as Claude Code, Google Antigravity, Cursor, or Gemini navigate an unfamiliar repository, they typically rely on repetitive grep queries and full file reads. On medium to large projects, this leads to 10-turn search loops, truncated context, and tens of thousands of wasted tokens.
+
+PigeonGraph solves this by maintaining an in-memory knowledge graph directly on your machine. It watches files as you save them, maps function calls and runtime routes, and provides a single-turn query engine (`pigeongraph explore`). Agents get exact symbol definitions, call hierarchies, and blast-radius impacts in under a millisecond, cutting token use by more than 96%.
+
+Everything runs locally with zero telemetry, requires no external database processes, and is licensed under the MIT license.
 
 ---
 
+## Contents
 
-## ⚡ Quickstart & 1-Command Setup
+1. [Quickstart and setup](#quickstart-and-setup)
+2. [Single-turn agent exploration](#single-turn-agent-exploration)
+3. [Comparative feature matrix](#comparative-feature-matrix)
+4. [Agent setup and MCP integrations](#agent-setup-and-mcp-integrations)
+5. [Supported languages and dynamic dispatch](#supported-languages-and-dynamic-dispatch)
+6. [Browser visualizer and PR blast radius](#browser-visualizer-and-pr-blast-radius)
+7. [Architecture](#architecture)
+8. [Security and prompt injection defense](#security-and-prompt-injection-defense)
+9. [CLI and GitHub Action reference](#cli-and-github-action-reference)
+10. [Empirical benchmarks and token reduction](#empirical-benchmarks-and-token-reduction)
+11. [Monorepo packages](#monorepo-packages)
+12. [Frequently asked questions](#frequently-asked-questions)
+13. [Contributing with AGENTS.md](#contributing-with-agentsmd)
+14. [License and attribution](#license-and-attribution)
 
-Get PigeonGraph running and hooked into your AI agent workflow in under 30 seconds:
+---
+
+## Quickstart and setup
+
+Get PigeonGraph running and configured in your editor in under 30 seconds:
 
 ### 1. Install
 
 ```bash
-# Global CLI install (Recommended)
+# Global install (recommended)
 npm install -g pigeongraph
 
 # Or build from source
 git clone https://github.com/Hoppy-Beast/pigeongraph.git
 cd pigeongraph && npm run setup
 ```
-*Requires [Node.js >= 22.5.0](https://nodejs.org) (Node 24 recommended for zero-dependency native `node:sqlite`).*
+Requires [Node.js >= 22.5.0](https://nodejs.org) (Node 24 LTS recommended for native `node:sqlite`).
 
-### 2. Auto-Register with Your AI Agents (1 Command)
+### 2. Register with your coding agents
 
-No need to hand-edit hidden JSON files. PigeonGraph automatically resolves paths and configures Claude Desktop, Claude Code, Cursor, Google Antigravity, and Gemini CLI:
+PigeonGraph can configure Claude Desktop, Claude Code, Cursor, Google Antigravity, and Gemini CLI automatically:
 
 ```bash
 pigeongraph install-mcp
 ```
-*To remove PigeonGraph cleanly at any time:* `pigeongraph uninstall-mcp`
+To remove the MCP registration later: `pigeongraph uninstall-mcp`
 
-### 3. Initialize Current Project
+### 3. Initialize your project
 
-Creates `.pigeongraph/config.json`, `.cursor/mcp.json`, and `.mcp.json` in your workspace:
+Generate `.pigeongraph/config.json`, `.cursor/mcp.json`, and `.mcp.json` in your workspace:
 ```bash
 pigeongraph init
 ```
 
-### 4. Immediate Terminal Commands
+### 4. Basic commands
 
 ```bash
-# 1-Shot architectural query
+# Query the architecture
 pigeongraph explore "verifyToken"
 
-# Live in-browser visualizer (http://127.0.0.1:5052)
+# Start the web visualizer (http://127.0.0.1:5052)
 pigeongraph ui
 
-# Pull Request blast radius & breaking change audit
+# Check pull request blast radius against a base branch
 pigeongraph audit-pr --base origin/main
 ```
 
 ---
 
-## 🎯 1-Shot Agent Experience
+## Single-turn agent exploration
 
-Instead of forcing your AI agent into a 15-turn search loop opening dozens of files and burning 100,000+ tokens, PigeonGraph returns everything the model needs in **one single turn**:
+Instead of making 15 search calls and reading dozens of whole files, an agent can ask for a symbol once and receive the exact definition, calling chain, and blast radius:
 
 ```bash
 $ pigeongraph explore "verifyToken"
@@ -171,50 +170,50 @@ $ pigeongraph explore "verifyToken"
 
 ---
 
-## ⚔️ Comparative Feature Matrix
+## Comparative feature matrix
 
-| Feature / Capability | CodeGraph | Graphify | GitNexus | **PigeonGraph (Our Engine)** |
+| Capability | CodeGraph | Graphify | GitNexus | PigeonGraph |
 | :--- | :---: | :---: | :---: | :---: |
-| **Licensing** | MIT (Permissive) | Apache 2.0 / MIT | **PolyForm Noncommercial (Commercial Ban)** | **MIT License (Permissive)** |
-| **Index Freshness** | Native OS Watcher (100–2000ms) | Batch / Git Hooks (Manual) | Batch CLI (`gitnexus analyze`) | **Native OS Watcher + Adaptive Debounce** |
-| **Multi-Modal Non-Code Docs (ADRs, Specs)** | ❌ (Code only) | ✅ (PDFs, Whisper, Docs) | ❌ (Code & Markdown only) | ✅ (Markdown, RFCs, ADRs, Invariants) |
-| **Dynamic Dispatch (EventEmitters, Routes, React)** | ✅ (Best-in-class) | ❌ (Raw name matching) | ⚠️ (MRO/DI only, misses events/React) | ✅ (EventEmitters + Routes + React + MRO) |
-| **Execution Flow Tracing (`STEP_IN_PROCESS`)** | ❌ (On-the-fly search only) | ❌ (Clusters only) | ✅ (Scored entry-point BFS flows) | ✅ (Precomputed `STEP_IN_PROCESS` sequences) |
-| **Agent MCP Experience** | ✅ **1-Tool Paradigm** (`explore`) | 7 MCP Tools | ❌ **17 MCP Tools (Tool Overload)** | ✅ **Tiered: 1 Primary (`explore`) + Analytical Opt-in** |
-| **Cross-Repo Contract Registry** | ❌ (Single repo only) | ⚠️ (Global graph merge) | ✅ (Repository Groups & Contracts) | ✅ (Cross-Repo Contract Linkages) |
-| **Client Memory Architecture** | SQLite DB file | NetworkX (High RAM ceiling) | Local Node backend (Server dependent) | **In-Memory Graphology + Zero-Server Mode** |
-| **Prompt Injection Protection** | ❌ (None) | ⚠️ (Basic tags) | ❌ (None) | ✅ (Defanged sentinels + `<untrusted_source>`) |
-| **Race Condition Safety (AST vs. LLM)** | N/A (AST only) | ❌ (Overwrites on rebuild) | ❌ (Sequential batch only) | ✅ (Triple-Hash Invariant State Machine) |
+| License | MIT | Apache 2.0 / MIT | PolyForm Noncommercial (commercial restriction) | MIT |
+| Index updates | Native OS watcher (100 to 2000 ms) | Manual / git hooks | Batch CLI (`gitnexus analyze`) | Native OS watcher with adaptive debounce |
+| Non-code documents (ADRs, specs) | No (code only) | Yes (PDFs, Whisper, docs) | No (code and markdown only) | Yes (Markdown, RFCs, ADRs, invariants) |
+| Dynamic dispatch (event emitters, routes, React) | Yes | No (name matching only) | Partial (MRO/DI only; lacks events and React) | Yes (EventEmitters, routes, React, MRO) |
+| Flow tracing (`STEP_IN_PROCESS`) | No (ad-hoc search) | No (clusters only) | Yes (scored entry-point BFS flows) | Yes (precomputed sequences) |
+| Agent MCP interface | Single tool (`explore`) | 7 tools | 17 tools | 1 primary (`explore`) with analytical opt-ins |
+| Cross-repository contracts | No (single repo) | Partial (graph merge) | Yes (repo groups) | Yes (contract linkages) |
+| Client memory model | SQLite file | NetworkX (higher memory footprint) | Local Node backend (server required) | In-memory Graphology store |
+| Prompt injection defense | None | Partial (basic tags) | None | Defanged sentinels with `<untrusted_source>` tags |
+| Race condition handling (AST vs. LLM) | N/A (AST only) | No (overwrites on rebuild) | No (sequential batch) | Triple-hash invariant state machine |
 
 ---
 
-## 🤖 Agent Setup & MCP Integrations
+## Agent setup and MCP integrations
 
-PigeonGraph natively implements the **Model Context Protocol (MCP)** (2024-11-05 spec) over `stdio`.
+PigeonGraph implements the Model Context Protocol (MCP, 2024-11-05 specification) over `stdio`.
 
-### 1-Command Auto Setup (Recommended)
+### Automatic setup
+
+Run the installer to detect installed tools and add the configuration:
 ```bash
-# Auto-detects all installed AI tools and injects correct config paths
 pigeongraph install-mcp
 ```
-*Handles GUI app PATH resolution on macOS/Windows and auto-allows Claude Code permissions.*
+This resolves PATH differences on Windows and macOS, and configures permissions for Claude Code.
 
----
+### Manual configuration and templates
 
-### Manual Configuration & Pre-Packaged Templates
+Configuration templates are available in [`templates/mcp/`](templates/mcp/) for manual setup:
 
-All agent configuration files share the standard format and are pre-packaged in the [`templates/mcp/`](templates/mcp/) folder for one-click copy/paste:
-
-| Agent / Environment | Config File Location | Ready Template |
+| Tool / Environment | Configuration file location | Template |
 | :--- | :--- | :--- |
-| **Claude Desktop** | `%APPDATA%\Claude\claude_desktop_config.json` (Win)<br>`~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) | [`templates/mcp/claude_desktop_config.json`](templates/mcp/claude_desktop_config.json) |
-| **Claude Code** | Global: `~/.claude.json`<br>Project: `./.mcp.json` | [`templates/mcp/claude_code_mcp.json`](templates/mcp/claude_code_mcp.json) |
-| **Cursor / Windsurf** | `.cursor/mcp.json` | [`templates/mcp/cursor_mcp.json`](templates/mcp/cursor_mcp.json) |
-| **Google Antigravity** | `~/.gemini/config/mcp_config.json` or `~/.gemini/antigravity/mcp_config.json` | [`templates/mcp/antigravity_mcp_config.json`](templates/mcp/antigravity_mcp_config.json) |
-| **Gemini CLI** | `~/.gemini/settings.json` | [`templates/mcp/gemini_settings.json`](templates/mcp/gemini_settings.json) |
-| **GitHub Copilot (VS Code)** | `.vscode/settings.json` | [`templates/mcp/vscode_copilot_settings.json`](templates/mcp/vscode_copilot_settings.json) |
+| Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json` (Windows)<br>`~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) | [`templates/mcp/claude_desktop_config.json`](templates/mcp/claude_desktop_config.json) |
+| Claude Code | Global: `~/.claude.json`<br>Project: `./.mcp.json` | [`templates/mcp/claude_code_mcp.json`](templates/mcp/claude_code_mcp.json) |
+| Cursor / Windsurf | `.cursor/mcp.json` | [`templates/mcp/cursor_mcp.json`](templates/mcp/cursor_mcp.json) |
+| Google Antigravity | `~/.gemini/config/mcp_config.json` or `~/.gemini/antigravity/mcp_config.json` | [`templates/mcp/antigravity_mcp_config.json`](templates/mcp/antigravity_mcp_config.json) |
+| Gemini CLI | `~/.gemini/settings.json` | [`templates/mcp/gemini_settings.json`](templates/mcp/gemini_settings.json) |
+| GitHub Copilot (VS Code) | `.vscode/settings.json` | [`templates/mcp/vscode_copilot_settings.json`](templates/mcp/vscode_copilot_settings.json) |
 
-#### Standard JSON Snippet:
+#### Standard configuration block
+
 ```json
 {
   "mcpServers": {
@@ -226,85 +225,89 @@ All agent configuration files share the standard format and are pre-packaged in 
 }
 ```
 
-*For Claude Code users:* Add `"allow": ["mcp__pigeongraph__*"]` under `permissions` in `~/.claude/settings.json` to allow queries without prompts.
+For Claude Code, add `"allow": ["mcp__pigeongraph__*"]` under `permissions` in `~/.claude/settings.json` to allow tool calls without manual confirmation.
 
-### Steering Your Agents (`AGENTS.md` / `CLAUDE.md` / `GEMINI.md`)
-Copy from [`templates/steering/AGENTS.md`](templates/steering/AGENTS.md) into your repository root:
+### Agent instructions (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`)
+
+Add the following snippet from [`templates/steering/AGENTS.md`](templates/steering/AGENTS.md) to your repository root:
 ```markdown
 <!-- pigeongraph-guidance -->
 ## Architectural Exploration with PigeonGraph
-Before crawling files with grep/find, ALWAYS query PigeonGraph first:
+Before crawling files with grep or find, query PigeonGraph first:
 - Use `pigeongraph_explore` (MCP) or `pigeongraph explore "<query>"` (CLI).
-- It provides exact definitions, line ranges, dynamic dispatches, and blast radius in 1 turn.
+- It provides definitions, line ranges, dynamic dispatches, and blast radius in a single turn.
 <!-- /pigeongraph-guidance -->
 ```
 
 ---
 
-## 🌐 Supported Languages & Dynamic Dispatch
+## Supported languages and dynamic dispatch
 
-PigeonGraph delivers zero-configuration parsing across primary enterprise languages:
+PigeonGraph parses common languages out of the box:
 
-| Language / Format | File Extensions | Extracted Entities & Parser Architecture |
+| Language or format | File extensions | Extracted entities |
 | :--- | :--- | :--- |
-| **TypeScript / JavaScript** | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs` | Dedicated AST: Classes, functions, methods, interfaces, imports, calls, extends, implements, exported symbols, React components, EventEmitters |
-| **Python** | `.py`, `.pyi` | Dedicated AST: Classes, async/sync functions, decorators, methods, module imports, inheritance hierarchies, FastAPI route decorators |
-| **Go** | `.go` | Dedicated AST: Packages, imports, structs, interfaces, method receivers `func (e *Engine)`, type parameters `[T any]`, call graph |
-| **Rust** | `.rs` | Dedicated AST: Modules (`mod`), imports (`use`), structs, enums, traits, `impl` blocks, methods, generics `<P, M, S>`, qualifiers (`async`, `unsafe`), call graph |
-| **Java / C / C++** | `.java`, `.c`, `.cpp`, `.h` | Generic Substrate: High-throughput function & procedure extraction (`function`, `def`, C declarations), signatures, file containment |
-| **Architecture Specs & ADRs** | `.md`, `.markdown`, `.txt` | Semantic Layer: RFCs, ADR status (`ACCEPTED`, `DEPRECATED`), invariants, `REQ-*` requirements, `#WHY:` design rationales |
+| TypeScript / JavaScript | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs` | Classes, functions, methods, interfaces, imports, calls, extends, implements, exported symbols, React components, EventEmitters |
+| Python | `.py`, `.pyi` | Classes, async and sync functions, decorators, methods, imports, inheritance trees, FastAPI route decorators |
+| Go | `.go` | Packages, imports, structs, interfaces, method receivers `func (e *Engine)`, type parameters `[T any]`, call graph |
+| Rust | `.rs` | Modules (`mod`), imports (`use`), structs, enums, traits, `impl` blocks, methods, generics `<P, M, S>`, qualifiers (`async`, `unsafe`), call graph |
+| Java, C, C++ | `.java`, `.c`, `.cpp`, `.h` | High-throughput function and procedure extraction, signatures, file containment |
+| Architecture specs and ADRs | `.md`, `.markdown`, `.txt` | RFCs, ADR status (`ACCEPTED`, `DEPRECATED`), invariants, `REQ-*` requirements, `#WHY:` design rationales |
 
-### Dynamic Dispatch Synthesis
-Static text search fails when calls happen indirectly through routers, event buses, or microservices:
+### Dynamic dispatch synthesis
 
-| Boundary / System | Source Expression | Synthesized Edge Target | Edge Kind & Dispatch Mechanism |
+Text search often misses calls made through routers, event emitters, or service boundaries:
+
+| Boundary or system | Source expression | Synthesized edge target | Edge kind |
 | :--- | :--- | :--- | :--- |
-| **Express / Node HTTP** | `app.get('/api/orders', listOrders)` | `function listOrders(req, res)` | `HANDLES_ROUTE` (`HTTP GET /api/orders`) |
-| **Express / Koa / Router** | `router.post('/checkout', checkoutHandler)` | `function checkoutHandler(req, res)` | `HANDLES_ROUTE` (`HTTP POST /checkout`) |
-| **Node.js EventEmitter** | `emitter.emit('order:created', data)` | `emitter.on('order:created', handler)` | `DYNAMIC_DISPATCH_EVENT` (`event_emitter.on(order:created)`) |
-| **Cross-Repo Microservices** | `fetch('/api/v1/checkout')` / `http.Get(...)` | Provider endpoint controller (`HANDLES_ROUTE`) | `CrossRepoContractLinkage` (`CONSUMER` ↔ `PROVIDER`) |
-| **React State Cascades** | `setState(...)` / `setCount(...)` | Dependent component re-render flow | `DYNAMIC_DISPATCH_REACT_STATE` (`react_state_rerender`) |
-| **Markdown ADR Specs** | `REQ-AUTH-01: verifyToken must check keys` | `function verifyToken(...)` | `IMPLEMENTS_SPEC` (`REQ-AUTH-01`) |
-| **Architecture Invariants** | `#WHY: Prevent double billing on retry` | `PaymentProcessor.charge()` | `JUSTIFIED_BY_ADR` (`ADR-005`) |
+| Express / Node HTTP | `app.get('/api/orders', listOrders)` | `function listOrders(req, res)` | `HANDLES_ROUTE` (`HTTP GET /api/orders`) |
+| Express / Koa / Router | `router.post('/checkout', checkoutHandler)` | `function checkoutHandler(req, res)` | `HANDLES_ROUTE` (`HTTP POST /checkout`) |
+| Node.js EventEmitter | `emitter.emit('order:created', data)` | `emitter.on('order:created', handler)` | `DYNAMIC_DISPATCH_EVENT` (`event_emitter.on(order:created)`) |
+| Microservices | `fetch('/api/v1/checkout')` / `http.Get(...)` | Provider endpoint controller (`HANDLES_ROUTE`) | `CrossRepoContractLinkage` (`CONSUMER` to `PROVIDER`) |
+| React state cascades | `setState(...)` / `setCount(...)` | Dependent component re-render flow | `DYNAMIC_DISPATCH_REACT_STATE` (`react_state_rerender`) |
+| Markdown ADR specs | `REQ-AUTH-01: verifyToken must check keys` | `function verifyToken(...)` | `IMPLEMENTS_SPEC` (`REQ-AUTH-01`) |
+| Architecture invariants | `#WHY: Prevent double billing on retry` | `PaymentProcessor.charge()` | `JUSTIFIED_BY_ADR` (`ADR-005`) |
 
 ---
 
-## 🖥️ Live Canvas Visualizer & PR Blast Radius
+## Browser visualizer and PR blast radius
 
-### 1. Live In-Browser Visualizer
-Launch a real-time responsive HTML5 Canvas force-directed graph viewer with live WebSocket mutation streaming:
+### Web visualizer
+
+To open the HTML5 Canvas graph viewer:
 ```bash
 pigeongraph ui [--port 5052]
 ```
-*Features:*
-* **Zero-Dependency Canvas**: 60fps force-directed physics without heavy frontend frameworks.
-* **WebSocket Mutation Diff Streaming**: Connects to `ws://127.0.0.1:5051` and emits glowing pulse animations on modified nodes when files are saved.
-* **Inspection Drawer**: Click any node to view file locations, call hierarchy, and source snippets.
+- Canvas runs at 60 fps with force-directed physics and no frontend framework dependencies.
+- Subscribes to changes over `ws://127.0.0.1:5051` and highlights updated nodes when files change on disk.
+- Click any node to open an inspection drawer with file paths, callers, callees, and code snippets.
 
-### 2. PR Blast Radius Auditor
-Audit PR pull requests directly from git diffs before merging:
+### Pull request blast radius audit
+
+Inspect incoming changes before merging:
 ```bash
 pigeongraph audit-pr --base origin/main
 ```
-*Output:*
+
+Output:
 ```markdown
-### 🐦 PigeonGraph PR Blast Radius Audit
+### PigeonGraph PR Blast Radius Audit
 
 | Overall Risk | Changed Files | Breaking Interfaces | Internal Refactors |
 | :---: | :---: | :---: | :---: |
-| 🟢 **LOW** | **1** | **0** | **1** |
+| LOW | 1 | 0 | 1 |
 
 #### Symbol Impact Breakdown
 | Symbol | File | Change Type | Blast Radius | Downstream Impact |
 | :--- | :--- | :---: | :---: | :--- |
-| `EvalEngine.collectSourceFiles` | `packages/pigeongraph-mcp/eval/eval-engine.ts` | ⚡ **Safe Internal Refactor** | 0 files | Safe internal refactor: public signature unchanged, 0 external blast radius. |
+| `EvalEngine.collectSourceFiles` | `packages/pigeongraph-mcp/eval/eval-engine.ts` | Safe Internal Refactor | 0 files | Safe internal refactor: public signature unchanged, 0 external blast radius. |
 
-> **PigeonGraph Invariant Hash (H_semantic_inv)** differentiates pure internal refactors from breaking signature alterations at zero token cost.
+> PigeonGraph Invariant Hash (H_semantic_inv) differentiates pure internal refactors from breaking signature alterations at zero token cost.
 ```
 
 ---
 
-## 🏗️ Architecture & Core Engine
+## Architecture
 
 ```mermaid
 flowchart TD
@@ -338,42 +341,43 @@ flowchart TD
     end
 ```
 
-### Tri-Layer SuperNode Schema
-Each node represents a unified multi-layer entity:
-* **Identity**: Unique URI (`sg://repo/path/file.ts#symbol`), URN, Kind, Qualified Name.
-* **Multi-Clock Versioning**: Monotonic Lamport Clock, Vector Clocks, and Triple-Invariant Hashes:
-  * `H_content`: SHA-256 byte digest of source code slice.
-  * `H_ast`: Normalized AST syntax subtree hash.
-  * `H_semantic_inv`: Public interface/visibility signature hash. Prevents expensive LLM re-inference when internal function implementations change without breaking exported signatures.
+### SuperNode schema
+
+Each node in the graph represents a unified entity across code and documents:
+- Identity: Unique URI (`sg://repo/path/file.ts#symbol`), URN, kind, and qualified name.
+- Clocks and versioning: Monotonic Lamport clocks, vector clocks, and three deterministic hashes:
+  - `H_content`: SHA-256 digest of the source code slice.
+  - `H_ast`: Normalized AST syntax subtree digest.
+  - `H_semantic_inv`: Public interface signature hash. Internal changes that leave exported signatures intact avoid invalidating downstream semantic inferences.
 
 ---
 
-## 🛡️ Enterprise Security & Prompt Injection Defense
+## Security and prompt injection defense
 
-Untrusted code repositories may contain malicious comments or markdown files with adversarial prompt injection strings (`<|im_start|>`, `<<SYS>>`, `[INST]`). PigeonGraph includes an automated **PromptDefanger**:
-1. **Sentinel Neutralization**: Replaces LLM control tokens with zero-width spaced equivalents (`<\u200b|\u200bim_start\u200b|\u200b>`).
-2. **Boundary Sandboxing**: Wraps untrusted source snippets inside `<untrusted_source sha256="...">` XML tags before LLM consumption.
-3. **Deterministic Token Isolation**: Guarantees zero adversarial system instruction hijacking.
+Code repositories and issues can contain text crafted to redirect or confuse AI models (`<|im_start|>`, `<<SYS>>`, `[INST]`). PigeonGraph processes untrusted input through a sanitization step (`PromptDefanger`):
+1. Sentinel neutralization: Inserts zero-width spaces into control tokens (`<\u200b|\u200bim_start\u200b|\u200b>`).
+2. Boundary wrapping: Places untrusted source snippets inside `<untrusted_source sha256="...">` blocks.
+3. Offline execution: Layer 1 runs locally without network access or third-party LLM calls.
 
-For full disclosure protocols, vulnerability reporting guidelines, and supported release channels, review our [**Security Policy (`contribute/SECURITY.md`)**](contribute/SECURITY.md).
+For vulnerability reporting procedures and release support, see the [Security Policy](contribute/SECURITY.md).
 
 ---
 
-## 💻 CLI & Reusable GitHub Action Reference
+## CLI and GitHub Action reference
 
-### CLI Commands
+### CLI commands
 
 | Command | Description |
 | :--- | :--- |
 | `pigeongraph init` | Generates `.pigeongraph/config.json` and agent `.cursor/mcp.json` files |
-| `pigeongraph install-mcp` | Automatically registers MCP server with Claude Desktop & Cursor configs |
-| `pigeongraph uninstall-mcp` | Cleanly removes MCP server from Claude Desktop & Cursor configs |
-| `pigeongraph explore <query>` | Answers architectural query in 1 shot, printing JSON result to stdout |
-| `pigeongraph ui [--port 5052]` | Launches zero-dependency live in-browser architecture visualizer with WebSocket streaming |
-| `pigeongraph audit-pr [--base <ref>]` | Evaluates PR changed files against base ref using `H_semantic_inv` to compute blast radius |
-| `pigeongraph serve-mcp` | Starts stdio JSON-RPC 2.0 Model Context Protocol (MCP) server |
+| `pigeongraph install-mcp` | Registers MCP server in Claude Desktop and Cursor configurations |
+| `pigeongraph uninstall-mcp` | Removes MCP server from Claude Desktop and Cursor configurations |
+| `pigeongraph explore <query>` | Runs a single-turn query and prints JSON results to stdout |
+| `pigeongraph ui [--port 5052]` | Starts the local web visualizer with live WebSocket updates |
+| `pigeongraph audit-pr [--base <ref>]` | Compares modified symbols against a base commit using `H_semantic_inv` to estimate blast radius |
+| `pigeongraph serve-mcp` | Starts the stdio JSON-RPC 2.0 MCP server |
 
-### Reusable GitHub Action (`.github/actions/blast-radius`)
+### GitHub Action (`.github/actions/blast-radius`)
 
 ```yaml
 name: PR Blast Radius Audit
@@ -394,84 +398,82 @@ jobs:
 
 ---
 
-## 📊 Empirical Benchmarks & Token Reduction
+## Empirical benchmarks and token reduction
 
-We evaluated an automated dual-arm benchmark comparing a standard AI agent workflow (**Arm A: Baseline Grep & Full File Reading**) against a PigeonGraph-equipped agent (**Arm B: 1-Shot `pigeongraph_explore`**) across **8 real-world production codebases**:
+We tested an automated dual-arm benchmark comparing standard search workflows (Arm A: grep and whole-file reads) against single-turn exploration with PigeonGraph (Arm B: `pigeongraph_explore`) across 8 production codebases:
 
-| Repository | Stack / Ecosystem | Target Architectural Query | Baseline Turns (Arm A) | PigeonGraph Turns (Arm B) | Baseline Context Tokens | PigeonGraph 1-Shot Tokens | **% Token Reduction** | **PigeonGraph Latency** | Sufficiency | Dynamic Dispatch Recall |
+| Repository | Stack / Ecosystem | Target Architectural Query | Baseline Turns (Arm A) | PigeonGraph Turns (Arm B) | Baseline Context Tokens | PigeonGraph 1-Shot Tokens | % Token Reduction | PigeonGraph Latency | Sufficiency | Dynamic Dispatch Recall |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`gin`** | Go (Backend HTTP Router) | `handleHTTPRequest` | 2 turns | **1 turn** | 7,315 tok | **381 tok** | **95%** | **756ms** | ✅ `SUFFICIENT` | N/A |
-| **`fastapi`** | Python (Async REST Framework) | `solve_dependencies` | 3 turns | **1 turn** | 252,210 tok | **394 tok** | **100%** | **10,111ms** | ✅ `SUFFICIENT` | N/A |
-| **`pigeongraph`** | TypeScript (Multi-Package Monorepo) | `synthesizeFrameworkRoutes` | 3 turns | **1 turn** | 11,249 tok | **1,333 tok** | **88%** | **59.7ms** | ✅ `SUFFICIENT` | ✅ **100%** |
-| **`ripgrep`** | Rust (Multi-Threaded CLI Engine) | `search_path` | 3 turns | **1 turn** | 15,616 tok | **516 tok** | **97%** | **1,790ms** | ✅ `SUFFICIENT` | N/A |
-| **`express`** | JavaScript / Node.js (Web Framework) | `handle` | 29 turns | **1 turn** | 102,316 tok | **629 tok** | **99%** | **41.6ms** | ✅ `SUFFICIENT` | ✅ **100%** |
-| **`zustand`** | TypeScript (Reactive State Store) | `createStore` | 27 turns | **1 turn** | 104,487 tok | **534 tok** | **99%** | **181ms** | ✅ `SUFFICIENT` | N/A |
-| **`flask`** | Python (WSGI Web Microframework) | `dispatch_request` | 5 turns | **1 turn** | 22,679 tok | **779 tok** | **97%** | **236ms** | ✅ `SUFFICIENT` | N/A |
-| **`excalidraw`** | TypeScript / React (Canvas Engine) | `renderStaticScene` | 14 turns | **1 turn** | 106,665 tok | **903 tok** | **99%** | **3,075ms** | ✅ `PARTIAL` | N/A |
+| `gin` | Go (Backend HTTP Router) | `handleHTTPRequest` | 2 turns | 1 turn | 7,315 tok | 381 tok | 95% | 756ms | SUFFICIENT | N/A |
+| `fastapi` | Python (Async REST Framework) | `solve_dependencies` | 3 turns | 1 turn | 252,210 tok | 394 tok | 100% | 10,111ms | SUFFICIENT | N/A |
+| `pigeongraph` | TypeScript (Multi-Package Monorepo) | `synthesizeFrameworkRoutes` | 3 turns | 1 turn | 11,249 tok | 1,333 tok | 88% | 59.7ms | SUFFICIENT | 100% |
+| `ripgrep` | Rust (Multi-Threaded CLI Engine) | `search_path` | 3 turns | 1 turn | 15,616 tok | 516 tok | 97% | 1,790ms | SUFFICIENT | N/A |
+| `express` | JavaScript / Node.js (Web Framework) | `handle` | 29 turns | 1 turn | 102,316 tok | 629 tok | 99% | 41.6ms | SUFFICIENT | 100% |
+| `zustand` | TypeScript (Reactive State Store) | `createStore` | 27 turns | 1 turn | 104,487 tok | 534 tok | 99% | 181ms | SUFFICIENT | N/A |
+| `flask` | Python (WSGI Web Microframework) | `dispatch_request` | 5 turns | 1 turn | 22,679 tok | 779 tok | 97% | 236ms | SUFFICIENT | N/A |
+| `excalidraw` | TypeScript / React (Canvas Engine) | `renderStaticScene` | 14 turns | 1 turn | 106,665 tok | 903 tok | 99% | 3,075ms | PARTIAL | N/A |
 
-### 🔬 Key Takeaways:
-1. **96.8% Average Token Reduction**: In production frameworks like FastAPI, Express, and Zustand, baseline agents burn **100,000+ tokens** traversing files, exhausting context limits in 2–3 queries. PigeonGraph answers in **381 to 1,333 tokens**.
-2. **Sub-60ms Exploration Latency**: Monorepo full-graph indexing and exploration completes in **41ms to 60ms** with zero database processes or network overhead.
-3. **100% Dynamic Dispatch Discovery**: Accurately resolves runtime routes, EventEmitter channels, and cross-repo microservice linkages that text search misses completely.
-4. **Reproduce the Benchmarks**:
+### Observations
+1. 96.8% average token reduction: In frameworks such as FastAPI, Express, and Zustand, standard exploration consumed 100,000+ tokens traversing dependencies. PigeonGraph returned the relevant slice in 381 to 1,333 tokens.
+2. Low query latency: Full graph lookup and path tracing completed in 41 ms to 60 ms on local SSDs with no external server overhead.
+3. Runtime dispatch discovery: Resolved router handlers, EventEmitter callbacks, and microservice HTTP endpoints that plain text matching missed.
+4. Reproducing the results:
    ```bash
    npm run bench
    ```
 
 ---
 
-## 📦 Monorepo Packages
+## Monorepo packages
 
-| Package | Purpose & Technologies |
+| Package | Purpose and technologies |
 | :--- | :--- |
-| **[`@pigeongraph/schema`](packages/pigeongraph-schema)** | Draft 2020-12 formal schema, Lamport/Vector clocks, invariant hashes (`H_content`, `H_ast`, `H_semantic_inv`) |
-| **[`@pigeongraph/substrate`](packages/pigeongraph-substrate)** | Sub-100ms universal AST parser, dynamic synthesizers, Node 24 native SQLite WAL + FTS5, WS streamer |
-| **[`@pigeongraph/semantic`](packages/pigeongraph-semantic)** | 4-tier persistent SQLite queue, prompt injection defanger sandbox, Markdown/ADR synthesizer |
-| **[`@pigeongraph/client`](packages/pigeongraph-client)** | Hot in-memory Graphology store, dual-buffer reconciler, 1-shot `pigeongraph_explore` engine |
-| **[`@pigeongraph/mcp`](packages/pigeongraph-mcp)** | Stdio JSON-RPC 2.0 MCP server, agent installer, and unified CLI (`pigeongraph`) |
+| [`@pigeongraph/schema`](packages/pigeongraph-schema) | Draft 2020-12 schema, Lamport and vector clocks, invariant hashes (`H_content`, `H_ast`, `H_semantic_inv`) |
+| [`@pigeongraph/substrate`](packages/pigeongraph-substrate) | Fast AST parser, dynamic synthesizers, Node native SQLite WAL and FTS5, WebSocket streamer |
+| [`@pigeongraph/semantic`](packages/pigeongraph-semantic) | SQLite job queue, prompt defanger, Markdown and ADR parser |
+| [`@pigeongraph/client`](packages/pigeongraph-client) | In-memory Graphology store, dual-buffer reconciler, single-turn explore engine |
+| [`@pigeongraph/mcp`](packages/pigeongraph-mcp) | Stdio JSON-RPC 2.0 MCP server, installer, and `pigeongraph` CLI |
 
 ---
 
-## ❓ Troubleshooting & FAQ
+## Frequently asked questions
 
-**Q: Why does PigeonGraph require Node.js >= 22.5.0?**  
-A: PigeonGraph is engineered as a **zero-external-dependency** code graph. It utilizes Node.js's native `node:sqlite` (`DatabaseSync`) module with built-in WAL and FTS5, introduced in Node.js v22.5.0. This eliminates the need for third-party C++ compilation toolchains (node-gyp, python, make).
+**Why does PigeonGraph require Node.js >= 22.5.0?**  
+PigeonGraph uses Node's built-in `node:sqlite` (`DatabaseSync`) module with WAL and FTS5 support, which was added in Node 22.5.0. This avoids external compilation dependencies such as node-gyp, Python, or make.
 
-**Q: How do I hook PigeonGraph into Claude Desktop in 1 second?**  
-A: Run `pigeongraph install-mcp`. It automatically finds your Claude Desktop config and adds PigeonGraph with zero manual editing.
+**How do I configure Claude Desktop?**  
+Run `pigeongraph install-mcp`. The command finds your local Claude Desktop configuration and adds PigeonGraph automatically.
 
-**Q: Leading slash issue in Windows PowerShell?**  
-A: In PowerShell, avoid typing `/pigeongraph` (leading `/` is treated as a root directory path separator). Use `pigeongraph explore ...` or `npx pigeongraph explore ...`.
+**Why does PowerShell show a path error with `/pigeongraph`?**  
+In PowerShell, a leading slash is treated as a filesystem root path. Run `pigeongraph explore ...` or `npx pigeongraph explore ...` without the leading slash.
 
-**Q: Can I run multiple agents against PigeonGraph simultaneously?**  
-A: Yes. The in-memory Graphology store and Substrate SQLite WAL support concurrent read queries without database lock contention.
-
----
-
-## 🤝 Contributing Your Ideas & Solutions with `AGENTS.md`
-
-We believe great software is built through open collaboration, curiosity, and shared passion. Whether you are an experienced engineer, a newcomer tinkering with code knowledge graphs, or pairing with an autonomous AI coding assistant, **we warmly welcome your ideas, solutions, and improvements!**
-
-### 🤖 Pair Programming with an AI Coding Agent?
-If you are using **Claude Code**, **Google Antigravity**, **Cursor**, **Gemini CLI**, or **GitHub Copilot**, contributing to PigeonGraph is as easy as pointing your agent to [**`AGENTS.md`**](AGENTS.md) in the repository root:
-
-* **Instant Architecture Context:** `AGENTS.md` provides AI agents with non-negotiable invariants (clean-room MIT license, 0-token deterministic Layer 1 AST extraction, triple-invariant hashes `H_content`/`H_ast`/`H_semantic_inv`), package dependency topology, and validation commands.
-* **Self-Dogfooding Navigation:** It teaches agents to run `pigeongraph explore "<query>"` before making edits so they understand call graphs and dynamic dispatches without burning tokens.
-* **Prompt Your Agent Directly:**
-  > *"Read `AGENTS.md` in the root of the repository and help me implement this feature / fix this issue with tests."*
-
-### 👩‍💻 Human Contributor Quick Links
-* **Step-by-Step Setup:** Follow our [**Contributing Guide (`contribute/CONTRIBUTING.md`)**](contribute/CONTRIBUTING.md) to set up your local development environment, build TypeScript packages, and run tests.
-* **Our Values:** We are dedicated to providing a welcoming, inclusive, and harassment-free community. Please review our [**Code of Conduct (`contribute/CODE_OF_CONDUCT.md`)**](contribute/CODE_OF_CONDUCT.md).
-* **Responsible Security:** Found a vulnerability? Check our [**Security Policy (`contribute/SECURITY.md`)**](contribute/SECURITY.md).
-
-Have a question, feedback, or an idea for PigeonGraph? Feel free to open an [Issue](https://github.com/Hoppy-Beast/pigeongraph/issues) or start a conversation in [Discussions](https://github.com/Hoppy-Beast/pigeongraph/discussions). We would love to collaborate with you!
+**Can multiple agents query PigeonGraph at the same time?**  
+Yes. The in-memory Graphology graph and Substrate SQLite WAL support concurrent read queries without locking.
 
 ---
 
-## 📜 License & Attribution
+## Contributing with AGENTS.md
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+We welcome contributions, bug fixes, and feature discussions. Whether you are contributing by hand or working with an AI assistant, getting started is straightforward.
 
-**Copyright (c) 2026 MD. Mahinur Rahman Prachurza (Hoppy-Beast)**
+### Working with an AI coding agent
+If you use Claude Code, Google Antigravity, Cursor, Gemini CLI, or GitHub Copilot, point your agent to [`AGENTS.md`](AGENTS.md) in the repository root:
+- It describes the package layout, dependency flow, and core invariants (clean-room MIT licensing, zero-token AST extraction, and invariant hash rules).
+- It instructs agents to use `pigeongraph explore "<query>"` to locate symbols and call paths before editing files.
+- You can tell your agent:
+  > "Read AGENTS.md in the root of the repository and follow its development guidelines."
 
+### Developer links
+- Setup and tests: see the [Contributing Guide](contribute/CONTRIBUTING.md) for build instructions and test commands.
+- Community guidelines: see the [Code of Conduct](contribute/CODE_OF_CONDUCT.md).
+- Security disclosures: see the [Security Policy](contribute/SECURITY.md).
+
+If you have an idea or run into an issue, open an [Issue](https://github.com/Hoppy-Beast/pigeongraph/issues) or start a discussion in [Discussions](https://github.com/Hoppy-Beast/pigeongraph/discussions).
+
+---
+
+## License and attribution
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+Copyright (c) 2026 MD. Mahinur Rahman Prachurza (Hoppy-Beast)
