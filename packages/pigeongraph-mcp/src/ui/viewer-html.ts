@@ -1,3 +1,5 @@
+import { PIGEONGRAPH_LOGO_BASE64 } from './logo-asset.js';
+
 export function getViewerHtml(wsPort = 5051): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -5,6 +7,7 @@ export function getViewerHtml(wsPort = 5051): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🐦 PigeonGraph — Live Architecture Canvas</title>
+  <link rel="icon" type="image/png" href="${PIGEONGRAPH_LOGO_BASE64}">
   <style>
     :root {
       --bg: #080b14;
@@ -525,7 +528,8 @@ export function getViewerHtml(wsPort = 5051): string {
 <body>
   <header>
     <div class="brand">
-      <span>🐦</span> PigeonGraph
+      <img src="${PIGEONGRAPH_LOGO_BASE64}" alt="PigeonGraph Logo" style="width: 24px; height: 24px; border-radius: 4px; object-fit: contain;">
+      <span>PigeonGraph</span>
       <span class="brand-badge">LIVE ARCHITECTURE</span>
     </div>
 
