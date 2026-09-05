@@ -142,8 +142,8 @@ export class AstExtractor {
 
     const classRegex = /^\s*(?:export\s+)?(?:abstract\s+)?class\s+([a-zA-Z0-9_$]+)(?:\s+extends\s+([a-zA-Z0-9_$]+))?(?:\s+implements\s+([^{]+))?/i;
     const importRegex = /^\s*import\s+(?:\{([^}]+)\}|([a-zA-Z0-9_$]+))\s+from\s+['"]([^'"]+)['"]/i;
-    const functionRegex = /^\s*(?:export\s+)?(?:async\s+)?function\s+([a-zA-Z0-9_$]+)\s*\(([^)]*)\)(?:\s*:\s*([^{;]+))?/i;
-    const arrowFnRegex = /^\s*(?:export\s+)?(?:const|let)\s+([a-zA-Z0-9_$]+)\s*=\s*(?:async\s*)?\(([^)]*)\)(?:\s*:\s*([^=]+))?\s*=>/i;
+    const functionRegex = /^\s*(?:export\s+)?(?:async\s+)?function\s+([a-zA-Z0-9_$]+)\s*(?:\(([^)]*)\))?/i;
+    const arrowFnRegex = /^\s*(?:export\s+)?(?:const|let)\s+([a-zA-Z0-9_$]+)\s*=\s*(?:async\s*)?(?:<[^>]+>\s*)?(?:\([^)]*\)|[a-zA-Z0-9_$]+|\()/i;
 
     let currentClassNode: SuperNode | null = null;
     let braceDepth = 0;
@@ -421,7 +421,7 @@ export class AstExtractor {
     _edges: Array<{ sourceId: string; targetId: string; edge: SubstrateEdge }>
   ): void {
     const { repoId, filePath, epoch, lamportClock } = options;
-    const defRegex = /^\s*(?:async\s+)?def\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)(?:\s*->\s*([^:]+))?:/i;
+    const defRegex = /^\s*(?:async\s+)?def\s+([a-zA-Z0-9_]+)\s*\(/i;
     const classRegex = /^\s*class\s+([a-zA-Z0-9_]+)(?:\(([^)]*)\))?:/i;
 
     let currentClass: string | null = null;
@@ -513,7 +513,7 @@ export class AstExtractor {
     _edges: Array<{ sourceId: string; targetId: string; edge: SubstrateEdge }>
   ): void {
     const { repoId, filePath, epoch, lamportClock } = options;
-    const fnRegex = /(?:fn|func|function|def)\s+([a-zA-Z0-9_]+)\s*\(/i;
+    const fnRegex = /(?:fn|func|function|def)\s+(?:\([^)]+\)\s+)?([a-zA-Z0-9_]+)\s*\(/i;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
