@@ -1,0 +1,30 @@
+﻿name: "🚀 Feature Request"
+description: "Suggest an architectural idea or new capability for PigeonGraph"
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We welcome proposals to make PigeonGraph faster, more capable, and easier for AI coding agents to navigate.
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Problem Description"
+      description: "Is your feature request related to a specific agent limitation or pain point?"
+      placeholder: "When AI agents analyze X, they lack context on Y..."
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: "Proposed Solution & Architecture"
+      description: "How should this feature work? Which Layer (0-4) does it affect?"
+      placeholder: "Add a synthesizer in @pigeongraph/substrate that parses..."
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternatives Considered"
+      description: "Any alternative approaches or competitor comparisons considered?"

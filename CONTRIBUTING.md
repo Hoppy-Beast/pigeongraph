@@ -56,7 +56,17 @@ pigeongraph/
 2. **Deterministic Foundations:** Never introduce probabilistic or LLM guessing into the Layer 1 AST extraction engine. Layer 1 must remain 100% deterministic with 0 token cost.
 3. **Format & Typecheck:** Run `npm run build && npm run test:all` before submitting your PR.
 
+## AI Coding Agent Directives
+
+If you are using or developing with an AI coding assistant (Claude Code, Cursor, Google Antigravity, Gemini, or GitHub Copilot), see [**`AGENTS.md`**](AGENTS.md) (or [**`agent.md`**](agent.md)) for repository architecture rules, invariant hash contracts, and self-dogfooding exploration instructions.
+
+## Governance & Security
+
+* **Code of Conduct**: This project follows the Contributor Covenant v2.1. See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+* **Security Vulnerabilities**: For responsible disclosure, please refer to [SECURITY.md](SECURITY.md).
+
 ## License & Attribution
 
-By contributing to PigeonGraph, you agree that your contributions will be licensed under the project's [MIT License](LICENSE).
+By contributing to PigeonGraph, you agree that your contributions will be licensed under the project's [MIT License](LICENSE).  
 Original Author & Creator: **MD. Mahinur Rahman Prachurza (Hoppy-Beast)**.
+

@@ -1,0 +1,48 @@
+﻿name: "🐛 Bug Report"
+description: "File a bug report or regression in PigeonGraph"
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please provide reproduction details below.
+  - type: input
+    id: environment
+    attributes:
+      label: "Environment Details"
+      description: "OS, Node.js version, and PigeonGraph version"
+      placeholder: "Windows 11, Node.js v24.2.0, PigeonGraph v1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: "Affected Package"
+      options:
+        - "@pigeongraph/schema (Layer 0)"
+        - "@pigeongraph/substrate (Layer 1)"
+        - "@pigeongraph/semantic (Layer 2)"
+        - "@pigeongraph/client (Layer 3)"
+        - "@pigeongraph/mcp (CLI / Server / UI)"
+        - "Agent Integration (Claude / Cursor / Antigravity)"
+        - "Other"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Reproduction Steps"
+      description: "How can we reproduce the issue?"
+      placeholder: |
+        1. Run `pigeongraph explore "mySymbol"`
+        2. Expected output ...
+        3. Actual output ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Console Logs or Error Output"
+      description: "Paste any CLI output, stack traces, or terminal logs here."
+      render: shell

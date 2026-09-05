@@ -6,6 +6,28 @@
   "license": "MIT",
   "private": true,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hoppy-Beast/pigeongraph.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Hoppy-Beast/pigeongraph/issues"
+  },
+  "homepage": "https://github.com/Hoppy-Beast/pigeongraph#readme",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "code-knowledge-graph",
+    "ast",
+    "code-intelligence",
+    "ai-agents",
+    "claude",
+    "cursor",
+    "antigravity",
+    "gemini",
+    "codebase-exploration",
+    "blast-radius"
+  ],
   "workspaces": [
     "packages/*"
   ],
