@@ -7,18 +7,23 @@ export function getViewerHtml(wsPort = 5051): string {
   <title>🐦 PigeonGraph — Live Architecture Canvas</title>
   <style>
     :root {
-      --bg: #090d16;
-      --panel-bg: rgba(15, 23, 42, 0.85);
+      --bg: #080b14;
+      --panel-bg: rgba(13, 20, 36, 0.88);
       --panel-border: #1e293b;
-      --text: #f1f5f9;
+      --panel-border-bright: #334155;
+      --text: #f8fafc;
       --text-muted: #94a3b8;
+      --text-dim: #64748b;
       --cyan: #06b6d4;
+      --cyan-bright: #22d3ee;
       --purple: #a855f7;
+      --purple-bright: #c084fc;
       --green: #10b981;
       --amber: #f59e0b;
       --rose: #f43f5e;
+      --blue: #3b82f6;
       --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,21 +34,23 @@ export function getViewerHtml(wsPort = 5051): string {
       overflow: hidden;
       height: 100vh;
       width: 100vw;
+      user-select: none;
     }
 
     /* Top Navigation Bar */
     header {
       position: absolute;
       top: 0; left: 0; right: 0;
-      height: 54px;
+      height: 56px;
       background: var(--panel-bg);
-      backdrop-filter: blur(12px);
+      backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--panel-border);
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 0 20px;
       z-index: 20;
+      gap: 16px;
     }
 
     .brand {
@@ -51,17 +58,29 @@ export function getViewerHtml(wsPort = 5051): string {
       align-items: center;
       gap: 10px;
       font-weight: 700;
-      font-size: 16px;
+      font-size: 15px;
       letter-spacing: -0.02em;
+      white-space: nowrap;
     }
     .brand-badge {
       background: rgba(6, 182, 212, 0.15);
       color: var(--cyan);
-      border: 1px solid rgba(6, 182, 212, 0.3);
+      border: 1px solid rgba(6, 182, 212, 0.35);
       padding: 2px 8px;
       border-radius: 9999px;
-      font-size: 11px;
+      font-size: 10px;
       font-family: var(--font-mono);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    /* Filter Controls in Header */
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      max-width: 720px;
     }
 
     .search-box {
@@ -71,28 +90,65 @@ export function getViewerHtml(wsPort = 5051): string {
       border: 1px solid var(--panel-border);
       border-radius: 8px;
       padding: 6px 12px;
-      width: 320px;
+      width: 260px;
       gap: 8px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .search-box:focus-within {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
     }
     .search-box input {
       background: transparent;
       border: none;
       color: var(--text);
-      font-size: 13px;
+      font-size: 12px;
       outline: none;
       width: 100%;
     }
-    .search-box input::placeholder { color: var(--text-muted); }
+    .search-box input::placeholder { color: var(--text-dim); }
+
+    .kind-filters {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+    }
+    .filter-btn {
+      background: #0f172a;
+      border: 1px solid var(--panel-border);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .filter-btn:hover {
+      background: #1e293b;
+      color: var(--text);
+      border-color: var(--panel-border-bright);
+    }
+    .filter-btn.active {
+      background: rgba(6, 182, 212, 0.2);
+      color: var(--cyan-bright);
+      border-color: rgba(6, 182, 212, 0.5);
+      font-weight: 600;
+    }
 
     .stats {
       display: flex;
       align-items: center;
-      gap: 16px;
-      font-size: 12px;
+      gap: 12px;
+      font-size: 11px;
       font-family: var(--font-mono);
+      white-space: nowrap;
     }
     .stat-pill {
-      background: #1e293b;
+      background: #0f172a;
+      border: 1px solid var(--panel-border);
       padding: 4px 10px;
       border-radius: 6px;
       color: var(--text-muted);
@@ -104,20 +160,29 @@ export function getViewerHtml(wsPort = 5051): string {
       align-items: center;
       gap: 6px;
       font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: #0f172a;
+      border: 1px solid var(--panel-border);
     }
     .pulse-dot {
       width: 8px; height: 8px;
       border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 8px var(--amber);
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+    .pulse-dot.connected {
       background: var(--green);
       box-shadow: 0 0 10px var(--green);
-      animation: pulse 2s infinite;
+      animation: pulse 2.5s infinite;
     }
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
+      50% { opacity: 0.5; transform: scale(0.85); }
     }
 
-    /* Main Viewport */
+    /* Main Canvas */
     #canvas-container {
       width: 100vw;
       height: 100vh;
@@ -129,24 +194,97 @@ export function getViewerHtml(wsPort = 5051): string {
     }
     canvas:active { cursor: grabbing; }
 
-    /* Right Inspection Drawer */
-    #drawer {
+    /* Floating Toolbar Controls */
+    .controls-bar {
       position: absolute;
-      top: 64px; right: 16px; bottom: 16px;
-      width: 360px;
+      bottom: 24px;
+      right: 24px;
       background: var(--panel-bg);
       backdrop-filter: blur(16px);
       border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      display: flex;
+      gap: 4px;
+      padding: 5px;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.5);
+      z-index: 15;
+    }
+    .control-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      width: 34px;
+      height: 34px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.15s;
+    }
+    .control-btn:hover {
+      background: #1e293b;
+      color: var(--text);
+    }
+    .control-btn.active {
+      background: rgba(6, 182, 212, 0.2);
+      color: var(--cyan);
+    }
+
+    /* Floating Legend */
+    .legend {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 10px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      z-index: 10;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.5);
+    }
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-color { width: 9px; height: 9px; border-radius: 50%; }
+    .legend-tip {
+      font-size: 10px;
+      color: var(--text-dim);
+      border-top: 1px solid var(--panel-border);
+      padding-top: 6px;
+      margin-top: 2px;
+    }
+
+    /* Right Inspection Drawer */
+    #drawer {
+      position: absolute;
+      top: 68px; right: 20px; bottom: 24px;
+      width: 380px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--panel-border);
       border-radius: 12px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+      box-shadow: 0 24px 48px rgba(0,0,0,0.6);
       display: flex;
       flex-direction: column;
       z-index: 30;
-      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
       overflow: hidden;
     }
     #drawer.collapsed {
-      transform: translateX(390px);
+      transform: translateX(410px);
+      opacity: 0;
+      pointer-events: none;
     }
 
     .drawer-header {
@@ -155,24 +293,88 @@ export function getViewerHtml(wsPort = 5051): string {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
+      background: rgba(15, 23, 42, 0.5);
     }
-    .drawer-title { font-size: 15px; font-weight: 600; word-break: break-all; }
+    .drawer-title-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-width: 300px;
+    }
+    .drawer-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      word-break: break-all;
+      letter-spacing: -0.01em;
+    }
+    .drawer-badge-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
     .drawer-kind {
       font-size: 10px;
       font-family: var(--font-mono);
+      font-weight: 600;
       text-transform: uppercase;
-      padding: 2px 6px;
+      padding: 2px 7px;
       border-radius: 4px;
-      background: rgba(168, 85, 247, 0.15);
-      color: var(--purple);
-      border: 1px solid rgba(168, 85, 247, 0.3);
-      margin-top: 4px;
+      background: rgba(168, 85, 247, 0.18);
+      color: var(--purple-bright);
+      border: 1px solid rgba(168, 85, 247, 0.35);
       display: inline-block;
     }
-    .close-btn {
-      background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 4px;
+    .drawer-pkg {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--blue);
+      border: 1px solid rgba(59, 130, 246, 0.3);
     }
-    .close-btn:hover { color: var(--text); }
+    .close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .close-btn:hover { color: var(--text); background: #1e293b; }
+
+    /* Quick Action Buttons in Drawer */
+    .drawer-actions {
+      display: flex;
+      gap: 8px;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--panel-border);
+      background: rgba(10, 15, 28, 0.4);
+    }
+    .action-btn {
+      flex: 1;
+      background: #0f172a;
+      border: 1px solid var(--panel-border);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      padding: 5px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+    .action-btn:hover {
+      background: #1e293b;
+      color: var(--text);
+      border-color: var(--panel-border-bright);
+    }
 
     .drawer-body {
       padding: 16px;
@@ -180,20 +382,8 @@ export function getViewerHtml(wsPort = 5051): string {
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      font-size: 13px;
-    }
-
-    .code-block {
-      background: #030712;
-      border: 1px solid #1f2937;
-      border-radius: 6px;
-      padding: 10px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: #38bdf8;
-      overflow-x: auto;
-      white-space: pre-wrap;
+      gap: 16px;
+      font-size: 12px;
     }
 
     .prop-row {
@@ -201,74 +391,158 @@ export function getViewerHtml(wsPort = 5051): string {
       flex-direction: column;
       gap: 4px;
     }
-    .prop-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .prop-val { font-size: 13px; font-family: var(--font-mono); color: var(--text); }
+    .prop-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-family: var(--font-mono);
+    }
+    .prop-val {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    .code-block {
+      background: #040711;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #38bdf8;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      line-height: 1.45;
+    }
+
+    /* Related Connections in Drawer */
+    .connections-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .connections-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      display: flex;
+      justify-content: space-between;
+    }
+    .connections-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+    .connection-pill {
+      background: #0f172a;
+      border: 1px solid var(--panel-border);
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .connection-pill:hover {
+      background: #1e293b;
+      color: var(--cyan-bright);
+      border-color: rgba(6, 182, 212, 0.4);
+    }
+    .connection-tag {
+      font-size: 9px;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.06);
+    }
 
     /* Live Mutation Feed */
     .feed-container {
       border-top: 1px solid var(--panel-border);
-      max-height: 160px;
+      max-height: 140px;
       display: flex;
       flex-direction: column;
-      background: rgba(3, 7, 18, 0.6);
+      background: rgba(4, 7, 17, 0.7);
     }
     .feed-title {
       font-size: 10px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-      padding: 8px 12px;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+      padding: 8px 14px;
       border-bottom: 1px solid var(--panel-border);
       font-family: var(--font-mono);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
     .feed-list {
       overflow-y: auto;
       flex: 1;
       font-family: var(--font-mono);
-      font-size: 11px;
-      padding: 6px 12px;
+      font-size: 10px;
+      padding: 6px 14px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
     }
     .feed-item {
       display: flex;
       gap: 6px;
       color: var(--text-muted);
     }
-    .feed-tag-upsert { color: var(--green); }
-    .feed-tag-delete { color: var(--rose); }
+    .feed-tag-upsert { color: var(--green); font-weight: 600; }
+    .feed-tag-delete { color: var(--rose); font-weight: 600; }
 
-    /* Floating Legend */
-    .legend {
+    /* Tooltip */
+    #tooltip {
       position: absolute;
-      bottom: 20px;
-      left: 20px;
-      background: var(--panel-bg);
-      backdrop-filter: blur(12px);
-      border: 1px solid var(--panel-border);
-      border-radius: 8px;
-      padding: 10px 14px;
-      display: flex;
-      gap: 14px;
-      font-size: 11px;
+      pointer-events: none;
+      background: rgba(15, 23, 42, 0.94);
+      border: 1px solid var(--cyan);
+      border-radius: 6px;
+      padding: 4px 8px;
       font-family: var(--font-mono);
-      z-index: 10;
+      font-size: 11px;
+      color: var(--text);
+      z-index: 100;
+      display: none;
+      white-space: nowrap;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.5);
     }
-    .legend-item { display: flex; align-items: center; gap: 6px; }
-    .legend-color { width: 10px; height: 10px; border-radius: 50%; }
   </style>
 </head>
 <body>
   <header>
     <div class="brand">
-      <span>🐦</span> PigeonGraph Canvas
-      <span class="brand-badge">LIVE AST</span>
+      <span>🐦</span> PigeonGraph
+      <span class="brand-badge">LIVE ARCHITECTURE</span>
     </div>
 
-    <div class="search-box">
-      <span>🔍</span>
-      <input type="text" id="search-input" placeholder="Filter symbols, routes, structs..." autocomplete="off">
+    <div class="filter-group">
+      <div class="search-box">
+        <span>🔍</span>
+        <input type="text" id="search-input" placeholder="Search symbol, route, file..." autocomplete="off">
+      </div>
+
+      <div class="kind-filters" id="kind-filters">
+        <button class="filter-btn active" data-kind="all">All</button>
+        <button class="filter-btn" data-kind="file">Files</button>
+        <button class="filter-btn" data-kind="class">Classes</button>
+        <button class="filter-btn" data-kind="method">Methods</button>
+        <button class="filter-btn" data-kind="function">Functions</button>
+        <button class="filter-btn" data-kind="route">Routes</button>
+      </div>
     </div>
 
     <div class="stats">
@@ -285,21 +559,56 @@ export function getViewerHtml(wsPort = 5051): string {
     <canvas id="viewport"></canvas>
   </div>
 
+  <div id="tooltip"></div>
+
+  <!-- Floating Controls -->
+  <div class="controls-bar">
+    <button class="control-btn" id="btn-fit" title="Fit to View (F / Space)">⛶</button>
+    <button class="control-btn" id="btn-zoom-in" title="Zoom In (+)">➕</button>
+    <button class="control-btn" id="btn-zoom-out" title="Zoom Out (-)">➖</button>
+    <button class="control-btn" id="btn-pause" title="Pause / Resume Physics (P)">⏸</button>
+    <button class="control-btn" id="btn-reheat" title="Reheat Layout (R)">🔄</button>
+  </div>
+
+  <!-- Floating Legend -->
+  <div class="legend">
+    <div class="legend-row">
+      <div class="legend-item"><span class="legend-color" style="background:#06b6d4;"></span> Function</div>
+      <div class="legend-item"><span class="legend-color" style="background:#38bdf8;"></span> Method</div>
+      <div class="legend-item"><span class="legend-color" style="background:#a855f7;"></span> Class / Struct</div>
+      <div class="legend-item"><span class="legend-color" style="background:#10b981;"></span> Route</div>
+      <div class="legend-item"><span class="legend-color" style="background:#f59e0b;"></span> File Hub</div>
+    </div>
+    <div class="legend-tip">
+      Scroll: Zoom &nbsp;|&nbsp; Drag: Pan/Move Node &nbsp;|&nbsp; Click: Inspect &nbsp;|&nbsp; F: Fit
+    </div>
+  </div>
+
+  <!-- Inspection Drawer -->
   <div id="drawer" class="collapsed">
     <div class="drawer-header">
-      <div>
+      <div class="drawer-title-row">
         <div class="drawer-title" id="d-name">Symbol Details</div>
-        <span class="drawer-kind" id="d-kind">FUNCTION</span>
+        <div class="drawer-badge-row">
+          <span class="drawer-kind" id="d-kind">FUNCTION</span>
+          <span class="drawer-pkg" id="d-pkg">package</span>
+        </div>
       </div>
-      <button class="close-btn" id="d-close">&times;</button>
+      <button class="close-btn" id="d-close" title="Close (Esc)">&times;</button>
     </div>
+
+    <div class="drawer-actions">
+      <button class="action-btn" id="btn-focus-node">🎯 Center Camera</button>
+      <button class="action-btn" id="btn-copy-id">📋 Copy URN</button>
+    </div>
+
     <div class="drawer-body">
       <div class="prop-row">
         <div class="prop-label">Qualified Name</div>
         <div class="prop-val" id="d-qname">-</div>
       </div>
       <div class="prop-row">
-        <div class="prop-label">File & Coordinates</div>
+        <div class="prop-label">Source Location</div>
         <div class="prop-val" id="d-loc">-</div>
       </div>
       <div class="prop-row">
@@ -307,37 +616,58 @@ export function getViewerHtml(wsPort = 5051): string {
         <div class="code-block" id="d-sig">// No signature</div>
       </div>
       <div class="prop-row">
-        <div class="prop-label">Epistemic Tier / Invariant Hash</div>
-        <div class="prop-val" id="d-hash" style="font-size: 10px; word-break: break-all;">-</div>
+        <div class="prop-label">Semantic Invariant Hash</div>
+        <div class="prop-val" id="d-hash" style="font-size: 10px; color: var(--text-muted);">-</div>
       </div>
-    </div>
-    <div class="feed-container">
-      <div class="feed-title">Live Mutation Diff Stream</div>
-      <div class="feed-list" id="mutation-feed">
-        <div class="feed-item"><span class="feed-tag-upsert">[READY]</span> Canvas initialized</div>
-      </div>
-    </div>
-  </div>
 
-  <div class="legend">
-    <div class="legend-item"><span class="legend-color" style="background:#06b6d4;"></span> Function / Method</div>
-    <div class="legend-item"><span class="legend-color" style="background:#a855f7;"></span> Struct / Class</div>
-    <div class="legend-item"><span class="legend-color" style="background:#10b981;"></span> HTTP Route</div>
-    <div class="legend-item"><span class="legend-color" style="background:#f59e0b;"></span> File</div>
+      <!-- Outgoing dependencies -->
+      <div class="connections-section">
+        <div class="connections-title">
+          <span>Outgoing Dependencies</span>
+          <span id="d-out-count" style="color:var(--cyan);">0</span>
+        </div>
+        <div class="connections-list" id="d-out-list">
+          <div style="color:var(--text-dim); font-size:11px;">No outgoing calls or imports</div>
+        </div>
+      </div>
+
+      <!-- Incoming dependencies -->
+      <div class="connections-section">
+        <div class="connections-title">
+          <span>Incoming Callers / References</span>
+          <span id="d-in-count" style="color:var(--purple-bright);">0</span>
+        </div>
+        <div class="connections-list" id="d-in-list">
+          <div style="color:var(--text-dim); font-size:11px;">No incoming callers detected</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feed-container">
+      <div class="feed-title">
+        <span>Live Diff Stream</span>
+        <span style="font-size:9px; color:var(--text-dim);">WebSocket :${wsPort}</span>
+      </div>
+      <div class="feed-list" id="mutation-feed">
+        <div class="feed-item"><span class="feed-tag-upsert">[READY]</span> Architecture Canvas loaded</div>
+      </div>
+    </div>
   </div>
 
   <script>
     const WS_PORT = ${wsPort};
     const canvas = document.getElementById('viewport');
     const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
+
     let width = window.innerWidth;
     let height = window.innerHeight;
 
     function resize() {
       width = window.innerWidth;
       height = window.innerHeight;
-      canvas.width = width * window.devicePixelRatio;
-      canvas.height = height * window.devicePixelRatio;
+      canvas.width = Math.floor(width * window.devicePixelRatio);
+      canvas.height = Math.floor(height * window.devicePixelRatio);
       canvas.style.width = width + 'px';
       canvas.style.height = height + 'px';
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
@@ -348,75 +678,186 @@ export function getViewerHtml(wsPort = 5051): string {
     // Graph Data
     const nodes = new Map();
     const edges = [];
+    const edgeSet = new Set();
+    const packageCenters = new Map();
+    const fileNodeMap = new Map();
+
+    // State
     let selectedNode = null;
     let hoveredNode = null;
     let searchQuery = '';
+    let selectedKind = 'all';
 
     // Camera
     let panX = width / 2;
     let panY = height / 2;
-    let zoom = 1;
+    let zoom = 0.65;
     let isPanning = false;
     let startPanX = 0, startPanY = 0;
     let draggedNode = null;
+    let hasAutoFitted = false;
 
-    // Colors by Kind
+    // Physics Engine State
+    let alpha = 1.0;
+    let isPhysicsPaused = false;
+    const centerGravity = 0.008;
+    const clusterStrength = 0.032;
+    const maxSpeed = 10.0;
+    const damping = 0.80;
+    const k = 42; // optimal spring distance
+
+    function reheat(temperature = 0.3) {
+      if (isPhysicsPaused) return;
+      alpha = Math.max(alpha, temperature);
+    }
+
+    // Determine package from file path
+    function extractPackage(filePath) {
+      if (!filePath) return 'core';
+      if (filePath.includes('packages/')) {
+        const parts = filePath.split('packages/')[1].split('/');
+        return parts[0] || 'core';
+      }
+      const top = filePath.split('/')[0] || 'core';
+      return top.replace(/\\.[^/.]+$/, '');
+    }
+
+    // Refresh orbital package anchors
+    function updatePackageClusters() {
+      const pkgs = new Set();
+      nodes.forEach(n => pkgs.add(n.pkg));
+      const pkgList = Array.from(pkgs);
+      const total = pkgList.length;
+
+      pkgList.forEach((pkg, i) => {
+        const angle = (i / total) * Math.PI * 2 - Math.PI / 2;
+        const radius = total > 2 ? 380 : 180;
+        packageCenters.set(pkg, {
+          x: Math.cos(angle) * radius,
+          y: Math.sin(angle) * radius
+        });
+      });
+
+      // Update cluster center on all nodes
+      nodes.forEach(n => {
+        n.clusterCenter = packageCenters.get(n.pkg) || { x: 0, y: 0 };
+        if (n.parentFileId && fileNodeMap.has(n.parentFileId)) {
+          n.parentFileNode = nodes.get(n.parentFileId);
+        }
+      });
+    }
+
+    // Colors
     function getNodeColor(kind) {
       switch (kind) {
-        case 'function':
-        case 'method': return '#06b6d4'; // Cyan
+        case 'function': return '#06b6d4';
+        case 'method': return '#38bdf8';
         case 'class':
         case 'struct':
-        case 'interface': return '#a855f7'; // Purple
-        case 'route': return '#10b981'; // Green
-        case 'file': return '#f59e0b'; // Amber
-        default: return '#94a3b8'; // Slate
+        case 'interface': return '#a855f7';
+        case 'route': return '#10b981';
+        case 'file': return '#f59e0b';
+        default: return '#64748b';
       }
     }
 
-    // Load initial snapshot
+    // Add or update node
+    function addOrUpdateNode(raw) {
+      const existing = nodes.get(raw.id);
+      const filePath = raw.substrate?.sourceLocation?.filePath || raw.name || '';
+      const pkg = extractPackage(filePath);
+
+      if (raw.kind === 'file') {
+        fileNodeMap.set(filePath, raw.id);
+      }
+
+      if (existing) {
+        Object.assign(existing, raw);
+        existing.pulse = 1.0;
+        existing.pkg = pkg;
+      } else {
+        const radius = raw.kind === 'file' ? 12 :
+                       raw.kind === 'class' || raw.kind === 'struct' ? 9 : 6;
+
+        const center = packageCenters.get(pkg) || { x: 0, y: 0 };
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * 60;
+
+        nodes.set(raw.id, {
+          ...raw,
+          pkg,
+          x: center.x + Math.cos(angle) * dist,
+          y: center.y + Math.sin(angle) * dist,
+          vx: 0,
+          vy: 0,
+          radius,
+          pulse: 0.8,
+          clusterCenter: center,
+          parentFileId: raw.kind !== 'file' ? fileNodeMap.get(filePath) : null
+        });
+      }
+
+      // Ingest outgoing edges from substrate
+      if (raw.substrate && raw.substrate.outgoingEdges) {
+        for (const e of raw.substrate.outgoingEdges) {
+          const edgeKey = raw.id + '->' + e.targetId + ':' + e.kind;
+          if (!edgeSet.has(edgeKey)) {
+            edgeSet.add(edgeKey);
+            edges.push({
+              source: raw.id,
+              target: e.targetId,
+              kind: e.kind
+            });
+          }
+        }
+      }
+    }
+
+    // Load initial graph snapshot
     async function loadSnapshot() {
       try {
         const res = await fetch('/api/graph');
         const data = await res.json();
+
         if (data.nodes) {
+          // Pre-populate file nodes first
+          data.nodes.forEach(n => {
+            if (n.kind === 'file') {
+              const fp = n.substrate?.sourceLocation?.filePath || n.name;
+              fileNodeMap.set(fp, n.id);
+            }
+          });
           data.nodes.forEach(n => addOrUpdateNode(n));
         }
+
         if (data.edges) {
-          edges.push(...data.edges);
+          for (const e of data.edges) {
+            const edgeKey = e.source + '->' + e.target + ':' + e.kind;
+            if (!edgeSet.has(edgeKey)) {
+              edgeSet.add(edgeKey);
+              edges.push(e);
+            }
+          }
         }
+
+        updatePackageClusters();
         updateCounts();
+        reheat(1.0);
+
+        // Pre-run 120 physics ticks so graph spawns in a coherent shape
+        for (let i = 0; i < 120; i++) {
+          stepSimulation();
+        }
+
+        // Frame graph automatically
+        setTimeout(() => {
+          fitToScreen();
+          hasAutoFitted = true;
+        }, 80);
+
       } catch (err) {
         console.error('Failed to load initial graph snapshot:', err);
       }
-    }
-
-    function addOrUpdateNode(n) {
-      const existing = nodes.get(n.id);
-      if (existing) {
-        Object.assign(existing, n);
-        existing.pulse = 1.0; // trigger visual glow
-      } else {
-        const radius = n.kind === 'file' ? 12 : n.kind === 'struct' || n.kind === 'class' ? 10 : 7;
-        nodes.set(n.id, {
-          ...n,
-          x: (Math.random() - 0.5) * 400,
-          y: (Math.random() - 0.5) * 400,
-          vx: 0,
-          vy: 0,
-          radius,
-          pulse: 1.0,
-        });
-      }
-      // Add edges from node outgoing edges
-      if (n.substrate && n.substrate.outgoingEdges) {
-        n.substrate.outgoingEdges.forEach(e => {
-          if (!edges.some(existing => existing.source === n.id && existing.target === e.targetId)) {
-            edges.push({ source: n.id, target: e.targetId, kind: e.kind });
-          }
-        });
-      }
-      updateCounts();
     }
 
     function updateCounts() {
@@ -429,18 +870,20 @@ export function getViewerHtml(wsPort = 5051): string {
       const item = document.createElement('div');
       item.className = 'feed-item';
       const tagClass = type === 'UPSERT' ? 'feed-tag-upsert' : 'feed-tag-delete';
-      item.innerHTML = '<span class="' + tagClass + '">[' + type + ']</span> ' + text;
+      const timeStr = new Date().toLocaleTimeString().split(' ')[0];
+      item.innerHTML = '<span style="color:var(--text-dim);">' + timeStr + '</span> <span class="' + tagClass + '">[' + type + ']</span> ' + text;
       feed.appendChild(item);
       feed.scrollTop = feed.scrollHeight;
     }
 
-    // WebSocket connection
+    // WebSocket Live Updates
     function connectWs() {
       const wsUrl = 'ws://' + window.location.hostname + ':' + WS_PORT;
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        document.getElementById('status-dot').style.background = '#10b981';
+        const dot = document.getElementById('status-dot');
+        dot.className = 'pulse-dot connected';
         document.getElementById('status-text').textContent = 'Live (' + WS_PORT + ')';
       };
 
@@ -455,40 +898,84 @@ export function getViewerHtml(wsPort = 5051): string {
               } else if (m.type === 'NodeDelete') {
                 nodes.delete(m.nodeId);
                 addFeedLog('DELETE', m.nodeId.split('#').pop() || m.nodeId);
-                updateCounts();
               }
             });
+            updatePackageClusters();
+            updateCounts();
+            reheat(0.25);
           }
         } catch (e) {
-          console.error(e);
+          console.error('WebSocket envelope parse error:', e);
         }
       };
 
       ws.onclose = () => {
-        document.getElementById('status-dot').style.background = '#f59e0b';
+        const dot = document.getElementById('status-dot');
+        dot.className = 'pulse-dot';
         document.getElementById('status-text').textContent = 'Reconnecting...';
         setTimeout(connectWs, 2000);
       };
     }
 
-    // Force simulation step
-    function stepSimulation() {
+    // Fit Graph into Viewport
+    function fitToScreen() {
       const nodeList = Array.from(nodes.values());
-      const repulsion = 1200;
-      const springLength = 70;
-      const springStrength = 0.05;
+      if (nodeList.length === 0) return;
 
-      // Repulsion between nodes
-      for (let i = 0; i < nodeList.length; i++) {
-        for (let j = i + 1; j < nodeList.length; j++) {
-          const a = nodeList[i];
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const n of nodeList) {
+        if (n.x < minX) minX = n.x;
+        if (n.x > maxX) maxX = n.x;
+        if (n.y < minY) minY = n.y;
+        if (n.y > maxY) maxY = n.y;
+      }
+
+      const graphWidth = Math.max(maxX - minX, 100);
+      const graphHeight = Math.max(maxY - minY, 100);
+      const padding = 120;
+
+      const availWidth = width - padding * 2;
+      const availHeight = height - padding * 2 - 56;
+
+      const scaleX = availWidth / graphWidth;
+      const scaleY = availHeight / graphHeight;
+      const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.25), 1.25);
+
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      zoom = targetZoom;
+      panX = width / 2 - centerX * zoom;
+      panY = height / 2 + 28 - centerY * zoom;
+    }
+
+    // Focus Camera on specific node
+    function centerOnNode(target) {
+      if (!target) return;
+      panX = width / 2 - target.x * zoom;
+      panY = height / 2 + 28 - target.y * zoom;
+    }
+
+    // Force Simulation Step
+    function stepSimulation() {
+      if (isPhysicsPaused || alpha <= 0.001) {
+        alpha = 0;
+        return;
+      }
+
+      const nodeList = Array.from(nodes.values());
+      const total = nodeList.length;
+
+      // 1. Softened Repulsion between all nodes
+      for (let i = 0; i < total; i++) {
+        const a = nodeList[i];
+        for (let j = i + 1; j < total; j++) {
           const b = nodeList[j];
           const dx = b.x - a.x;
           const dy = b.y - a.y;
-          const distSq = dx * dx + dy * dy || 1;
-          const dist = Math.sqrt(distSq);
-          if (dist < 400) {
-            const force = repulsion / distSq;
+          const dist = Math.max(16, Math.hypot(dx, dy));
+          if (dist < 280) {
+            const force = ((k * k) / dist) * alpha * 0.12;
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
             a.vx -= fx;
@@ -499,51 +986,96 @@ export function getViewerHtml(wsPort = 5051): string {
         }
       }
 
-      // Attraction along edges
-      for (const e of edges) {
-        const source = nodes.get(e.source);
-        const target = nodes.get(e.target);
-        if (source && target) {
-          const dx = target.x - source.x;
-          const dy = target.y - source.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const force = (dist - springLength) * springStrength;
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-          source.vx += fx;
-          source.vy += fy;
-          target.vx -= fx;
-          target.vy -= fy;
+      // 2. Spring Attraction along Edges
+      for (let i = 0; i < edges.length; i++) {
+        const e = edges[i];
+        const s = nodes.get(e.source);
+        const t = nodes.get(e.target);
+        if (!s || !t) continue;
+
+        const dx = t.x - s.x;
+        const dy = t.y - s.y;
+        const dist = Math.max(2, Math.hypot(dx, dy));
+        const targetDist = e.kind === 'CONTAINS' ? 35 : 70;
+        const force = (dist - targetDist) * 0.035 * alpha;
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+
+        s.vx += fx;
+        s.vy += fy;
+        t.vx -= fx;
+        t.vy -= fy;
+      }
+
+      // 3. Virtual Hierarchy Attraction (Symbols nestled near parent file)
+      for (let i = 0; i < total; i++) {
+        const n = nodeList[i];
+        if (n.parentFileNode) {
+          const p = n.parentFileNode;
+          const dx = p.x - n.x;
+          const dy = p.y - n.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 45) {
+            n.vx += (dx / (dist || 1)) * (dist - 45) * 0.025 * alpha;
+            n.vy += (dy / (dist || 1)) * (dist - 45) * 0.025 * alpha;
+          }
         }
       }
 
-      // Update positions
-      for (const n of nodeList) {
+      // 4. Cluster Anchoring, Global Center Gravity, Clamping & Integration
+      for (let i = 0; i < total; i++) {
+        const n = nodeList[i];
         if (n === draggedNode) continue;
-        n.vx *= 0.85;
-        n.vy *= 0.85;
+
+        // Pull toward package cluster
+        if (n.clusterCenter) {
+          n.vx += (n.clusterCenter.x - n.x) * clusterStrength * alpha;
+          n.vy += (n.clusterCenter.y - n.y) * clusterStrength * alpha;
+        }
+
+        // Global centering gravity toward (0, 0)
+        n.vx -= n.x * centerGravity * alpha;
+        n.vy -= n.y * centerGravity * alpha;
+
+        // Velocity clamping
+        const speed = Math.hypot(n.vx, n.vy);
+        if (speed > maxSpeed) {
+          n.vx = (n.vx / speed) * maxSpeed;
+          n.vy = (n.vy / speed) * maxSpeed;
+        }
+
+        // Damping
+        n.vx *= damping;
+        n.vy *= damping;
         n.x += n.vx;
         n.y += n.vy;
-        if (n.pulse > 0) n.pulse = Math.max(0, n.pulse - 0.015);
+
+        // Pulse decay
+        if (n.pulse > 0) {
+          n.pulse = Math.max(0, n.pulse - 0.02);
+        }
       }
+
+      // Cooling schedule
+      alpha *= 0.993;
     }
 
-    // Render loop
+    // Render Loop
     function render() {
       stepSimulation();
 
       ctx.save();
       ctx.clearRect(0, 0, width, height);
 
-      // Background grid dots
-      ctx.fillStyle = '#1e293b';
+      // Background Grid Dots
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.07)';
       const gridSize = 40 * zoom;
-      const offsetX = panX % gridSize;
-      const offsetY = panY % gridSize;
+      const offsetX = (panX % gridSize + gridSize) % gridSize;
+      const offsetY = (panY % gridSize + gridSize) % gridSize;
       for (let x = offsetX; x < width; x += gridSize) {
         for (let y = offsetY; y < height; y += gridSize) {
           ctx.beginPath();
-          ctx.arc(x, y, 1, 0, Math.PI * 2);
+          ctx.arc(x, y, 1.2, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -551,69 +1083,189 @@ export function getViewerHtml(wsPort = 5051): string {
       ctx.translate(panX, panY);
       ctx.scale(zoom, zoom);
 
-      // Draw Edges
-      ctx.lineWidth = 1;
-      for (const e of edges) {
+      // Draw Package Cluster Watermarks when zoomed out
+      if (zoom < 1.1) {
+        ctx.font = 'bold 16px var(--font-mono)';
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.08)';
+        ctx.textAlign = 'center';
+        packageCenters.forEach((center, pkg) => {
+          ctx.fillText(pkg.toUpperCase(), center.x, center.y - 120);
+        });
+        ctx.textAlign = 'left';
+      }
+
+      // Determine active highlight neighborhood
+      const activeNode = hoveredNode || selectedNode;
+      const connectedNodeIds = new Set();
+      if (activeNode) {
+        connectedNodeIds.add(activeNode.id);
+        for (const e of edges) {
+          if (e.source === activeNode.id) connectedNodeIds.add(e.target);
+          if (e.target === activeNode.id) connectedNodeIds.add(e.source);
+        }
+      }
+
+      // 1. Draw Edges
+      for (let i = 0; i < edges.length; i++) {
+        const e = edges[i];
         const s = nodes.get(e.source);
         const t = nodes.get(e.target);
         if (!s || !t) continue;
 
-        const isHighlight = selectedNode && (s.id === selectedNode.id || t.id === selectedNode.id);
-        ctx.strokeStyle = isHighlight ? '#06b6d4' : 'rgba(51, 65, 85, 0.4)';
-        ctx.lineWidth = isHighlight ? 2 : 1;
+        // Filter visibility
+        if (selectedKind !== 'all') {
+          if (s.kind !== selectedKind && t.kind !== selectedKind) continue;
+        }
+
+        const isIncident = activeNode && (s.id === activeNode.id || t.id === activeNode.id);
+
+        if (activeNode) {
+          if (isIncident) {
+            ctx.strokeStyle = s.id === activeNode.id ? '#06b6d4' : '#a855f7';
+            ctx.lineWidth = 2.5;
+            ctx.globalAlpha = 0.9;
+          } else {
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 0.7;
+            ctx.globalAlpha = 0.05; // spotlight dim
+          }
+        } else {
+          ctx.strokeStyle = e.kind === 'CONTAINS' ? 'rgba(71, 85, 105, 0.25)' : 'rgba(56, 189, 248, 0.22)';
+          ctx.lineWidth = 1;
+          ctx.globalAlpha = 0.45;
+        }
 
         ctx.beginPath();
         ctx.moveTo(s.x, s.y);
         ctx.lineTo(t.x, t.y);
         ctx.stroke();
+
+        // Direction arrowhead for highlighted edges
+        if (isIncident && zoom > 0.4) {
+          const angle = Math.atan2(t.y - s.y, t.x - s.x);
+          const arrowDist = t.radius + 6;
+          const ax = t.x - Math.cos(angle) * arrowDist;
+          const ay = t.y - Math.sin(angle) * arrowDist;
+          ctx.fillStyle = ctx.strokeStyle;
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(ax - 6 * Math.cos(angle - Math.PI / 6), ay - 6 * Math.sin(angle - Math.PI / 6));
+          ctx.lineTo(ax - 6 * Math.cos(angle + Math.PI / 6), ay - 6 * Math.sin(angle + Math.PI / 6));
+          ctx.fill();
+        }
       }
 
-      // Draw Nodes
+      ctx.globalAlpha = 1.0;
+
+      // 2. Draw Nodes
+      const showAllLabels = zoom >= 1.25;
+      const showMidLabels = zoom >= 0.65;
+
       for (const n of nodes.values()) {
         const isMatch = searchQuery && n.name.toLowerCase().includes(searchQuery);
         const isSelected = selectedNode && selectedNode.id === n.id;
-        const color = getNodeColor(n.kind);
+        const isHovered = hoveredNode && hoveredNode.id === n.id;
+        const isConnected = connectedNodeIds.has(n.id);
+        const matchesKind = selectedKind === 'all' || n.kind === selectedKind;
 
-        // Pulse glow ring for updates
+        // Dimming factor
+        let nodeAlpha = 1.0;
+        if (activeNode && !isConnected && !isMatch) {
+          nodeAlpha = 0.15;
+        } else if (!matchesKind) {
+          nodeAlpha = 0.10;
+        }
+        ctx.globalAlpha = nodeAlpha;
+
+        const baseColor = getNodeColor(n.kind);
+
+        // Pulse halo for live mutations
         if (n.pulse > 0) {
           ctx.beginPath();
-          ctx.arc(n.x, n.y, n.radius + n.pulse * 14, 0, Math.PI * 2);
+          ctx.arc(n.x, n.y, n.radius + n.pulse * 18, 0, Math.PI * 2);
           ctx.strokeStyle = 'rgba(6, 182, 212, ' + n.pulse + ')';
           ctx.lineWidth = 2;
           ctx.stroke();
         }
 
-        // Node Circle
+        // Outer glow halo for selected or hovered
+        if (isSelected || isHovered || isMatch) {
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, n.radius + (isSelected ? 6 : 4), 0, Math.PI * 2);
+          ctx.fillStyle = isSelected ? 'rgba(6, 182, 212, 0.3)' : 'rgba(255, 255, 255, 0.2)';
+          ctx.fill();
+        }
+
+        // Node Circle Core
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = isSelected || isMatch ? 16 : 4;
+        ctx.fillStyle = baseColor;
         ctx.fill();
-        ctx.shadowBlur = 0;
 
-        // Label
-        ctx.font = (isSelected ? 'bold 12px ' : '10px ') + 'var(--font-mono)';
-        ctx.fillStyle = isSelected ? '#38bdf8' : isMatch ? '#fef08a' : '#cbd5e1';
-        ctx.fillText(n.name, n.x + n.radius + 4, n.y + 4);
+        // Border
+        ctx.strokeStyle = isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.stroke();
+
+        // Level-of-Detail (LOD) Label
+        const shouldShowLabel = isSelected || isHovered || isMatch ||
+          (n.kind === 'file' && zoom > 0.4) ||
+          (showMidLabels && (n.kind === 'class' || n.kind === 'struct' || n.kind === 'route')) ||
+          showAllLabels;
+
+        if (shouldShowLabel && nodeAlpha > 0.25) {
+          const fontSize = isSelected ? 12 : 10;
+          ctx.font = (isSelected ? 'bold ' : '') + fontSize + 'px var(--font-mono)';
+          const text = n.name;
+          const textWidth = ctx.measureText(text).width;
+          const tx = n.x + n.radius + 6;
+          const ty = n.y - fontSize / 2;
+
+          // Frosted background pill for crisp readability
+          ctx.fillStyle = 'rgba(8, 12, 22, 0.82)';
+          ctx.fillRect(tx - 3, ty, textWidth + 6, fontSize + 4);
+
+          // Label text
+          if (isSelected) {
+            ctx.fillStyle = '#38bdf8';
+          } else if (isMatch) {
+            ctx.fillStyle = '#fef08a';
+          } else if (n.kind === 'file') {
+            ctx.fillStyle = '#fde68a';
+          } else {
+            ctx.fillStyle = '#cbd5e1';
+          }
+          ctx.fillText(text, tx, ty + fontSize);
+        }
       }
 
       ctx.restore();
       requestAnimationFrame(render);
     }
 
-    // Interaction handling
-    canvas.addEventListener('mousedown', (e) => {
-      const mouseX = (e.clientX - panX) / zoom;
-      const mouseY = (e.clientY - panY) / zoom;
+    // Interaction: Hover & Hit Testing
+    function getNodeAt(px, py) {
+      const mouseX = (px - panX) / zoom;
+      const mouseY = (py - panY) / zoom;
 
       for (const n of nodes.values()) {
+        const hitRadius = Math.max(n.radius + 4, 10);
         const dist = Math.hypot(n.x - mouseX, n.y - mouseY);
-        if (dist <= n.radius + 4) {
-          draggedNode = n;
-          selectNode(n);
-          return;
+        if (dist <= hitRadius) {
+          return n;
         }
+      }
+      return null;
+    }
+
+    // Canvas Events
+    canvas.addEventListener('mousedown', (e) => {
+      const hit = getNodeAt(e.clientX, e.clientY);
+      if (hit) {
+        draggedNode = hit;
+        selectNode(hit);
+        reheat(0.3);
+        return;
       }
 
       isPanning = true;
@@ -627,23 +1279,54 @@ export function getViewerHtml(wsPort = 5051): string {
         draggedNode.y = (e.clientY - panY) / zoom;
         draggedNode.vx = 0;
         draggedNode.vy = 0;
-      } else if (isPanning) {
+        reheat(0.25);
+        return;
+      }
+
+      if (isPanning) {
         panX = e.clientX - startPanX;
         panY = e.clientY - startPanY;
+        return;
+      }
+
+      // Hover check
+      const hit = getNodeAt(e.clientX, e.clientY);
+      if (hit !== hoveredNode) {
+        hoveredNode = hit;
+        canvas.style.cursor = hit ? 'pointer' : 'grab';
+        if (hit) {
+          tooltip.style.display = 'block';
+          tooltip.style.left = (e.clientX + 14) + 'px';
+          tooltip.style.top = (e.clientY - 12) + 'px';
+          tooltip.innerHTML = '<span style="color:' + getNodeColor(hit.kind) + '">[' + hit.kind.toUpperCase() + ']</span> ' + hit.name;
+        } else {
+          tooltip.style.display = 'none';
+        }
+      } else if (hit) {
+        tooltip.style.left = (e.clientX + 14) + 'px';
+        tooltip.style.top = (e.clientY - 12) + 'px';
       }
     });
 
     window.addEventListener('mouseup', () => {
       draggedNode = null;
       isPanning = false;
+      canvas.style.cursor = hoveredNode ? 'pointer' : 'grab';
     });
 
+    // Pointer-anchored wheel zooming
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-      zoom = Math.min(Math.max(zoom * zoomFactor, 0.2), 3);
-    });
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+      const newZoom = Math.min(Math.max(zoom * zoomFactor, 0.15), 4.0);
 
+      // Anchor zoom to cursor coordinates
+      panX = e.clientX - (e.clientX - panX) * (newZoom / zoom);
+      panY = e.clientY - (e.clientY - panY) * (newZoom / zoom);
+      zoom = newZoom;
+    }, { passive: false });
+
+    // Select & Populate Node Details
     function selectNode(n) {
       selectedNode = n;
       const drawer = document.getElementById('drawer');
@@ -651,21 +1334,147 @@ export function getViewerHtml(wsPort = 5051): string {
 
       document.getElementById('d-name').textContent = n.name;
       document.getElementById('d-kind').textContent = n.kind.toUpperCase();
+      document.getElementById('d-pkg').textContent = n.pkg || 'core';
       document.getElementById('d-qname').textContent = n.qualifiedName || n.name;
-      document.getElementById('d-loc').textContent = (n.substrate?.sourceLocation?.filePath || '') + ':' + (n.substrate?.sourceLocation?.startLine || 1);
+
+      const loc = n.substrate?.sourceLocation;
+      document.getElementById('d-loc').textContent = loc ? loc.filePath + ':' + loc.startLine : 'Unknown';
       document.getElementById('d-sig').textContent = n.substrate?.symbolSignature || '// No explicit signature';
       document.getElementById('d-hash').textContent = n.versioning?.semanticValidityHash || 'N/A';
+
+      // Outgoing connections
+      const outList = document.getElementById('d-out-list');
+      outList.innerHTML = '';
+      const outgoing = edges.filter(e => e.source === n.id);
+      document.getElementById('d-out-count').textContent = outgoing.length;
+      if (outgoing.length === 0) {
+        outList.innerHTML = '<div style="color:var(--text-dim); font-size:11px;">No outgoing dependencies</div>';
+      } else {
+        outgoing.forEach(e => {
+          const target = nodes.get(e.target);
+          const item = document.createElement('div');
+          item.className = 'connection-pill';
+          const targetName = target ? target.name : e.target.split('#').pop() || e.target;
+          item.innerHTML = '<span>' + targetName + '</span><span class="connection-tag">' + e.kind + '</span>';
+          if (target) {
+            item.onclick = () => {
+              selectNode(target);
+              centerOnNode(target);
+              reheat(0.2);
+            };
+          }
+          outList.appendChild(item);
+        });
+      }
+
+      // Incoming connections
+      const inList = document.getElementById('d-in-list');
+      inList.innerHTML = '';
+      const incoming = edges.filter(e => e.target === n.id);
+      document.getElementById('d-in-count').textContent = incoming.length;
+      if (incoming.length === 0) {
+        inList.innerHTML = '<div style="color:var(--text-dim); font-size:11px;">No incoming references</div>';
+      } else {
+        incoming.forEach(e => {
+          const source = nodes.get(e.source);
+          const item = document.createElement('div');
+          item.className = 'connection-pill';
+          const srcName = source ? source.name : e.source.split('#').pop() || e.source;
+          item.innerHTML = '<span>' + srcName + '</span><span class="connection-tag">' + e.kind + '</span>';
+          if (source) {
+            item.onclick = () => {
+              selectNode(source);
+              centerOnNode(source);
+              reheat(0.2);
+            };
+          }
+          inList.appendChild(item);
+        });
+      }
     }
 
+    // Drawer Controls
     document.getElementById('d-close').addEventListener('click', () => {
       document.getElementById('drawer').classList.add('collapsed');
       selectedNode = null;
     });
 
-    document.getElementById('search-input').addEventListener('input', (e) => {
-      searchQuery = e.target.value.toLowerCase().trim();
+    document.getElementById('btn-focus-node').addEventListener('click', () => {
+      if (selectedNode) centerOnNode(selectedNode);
     });
 
+    document.getElementById('btn-copy-id').addEventListener('click', () => {
+      if (selectedNode) {
+        navigator.clipboard.writeText(selectedNode.id);
+        const btn = document.getElementById('btn-copy-id');
+        btn.textContent = '✅ Copied!';
+        setTimeout(() => { btn.textContent = '📋 Copy URN'; }, 1500);
+      }
+    });
+
+    // Toolbar Buttons
+    document.getElementById('btn-fit').addEventListener('click', fitToScreen);
+
+    document.getElementById('btn-zoom-in').addEventListener('click', () => {
+      zoom = Math.min(zoom * 1.25, 4.0);
+    });
+
+    document.getElementById('btn-zoom-out').addEventListener('click', () => {
+      zoom = Math.max(zoom * 0.8, 0.15);
+    });
+
+    document.getElementById('btn-pause').addEventListener('click', () => {
+      isPhysicsPaused = !isPhysicsPaused;
+      const btn = document.getElementById('btn-pause');
+      btn.textContent = isPhysicsPaused ? '▶' : '⏸';
+      btn.title = isPhysicsPaused ? 'Resume Physics (P)' : 'Pause Physics (P)';
+      if (!isPhysicsPaused) reheat(0.3);
+    });
+
+    document.getElementById('btn-reheat').addEventListener('click', () => {
+      reheat(0.8);
+    });
+
+    // Search Input
+    document.getElementById('search-input').addEventListener('input', (e) => {
+      searchQuery = e.target.value.toLowerCase().trim();
+      reheat(0.15);
+    });
+
+    // Kind Filter Buttons
+    document.getElementById('kind-filters').addEventListener('click', (e) => {
+      if (e.target.classList.contains('filter-btn')) {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        selectedKind = e.target.dataset.kind;
+        reheat(0.2);
+      }
+    });
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.key === 'f' || e.key === 'F' || e.code === 'Space') {
+        e.preventDefault();
+        fitToScreen();
+      } else if (e.key === 'Escape') {
+        document.getElementById('drawer').classList.add('collapsed');
+        selectedNode = null;
+      } else if (e.key === '+' || e.key === '=') {
+        zoom = Math.min(zoom * 1.25, 4.0);
+      } else if (e.key === '-' || e.key === '_') {
+        zoom = Math.max(zoom * 0.8, 0.15);
+      } else if (e.key === 'p' || e.key === 'P') {
+        document.getElementById('btn-pause').click();
+      } else if (e.key === 'r' || e.key === 'R') {
+        reheat(0.8);
+      } else if (e.key === '/') {
+        e.preventDefault();
+        document.getElementById('search-input').focus();
+      }
+    });
+
+    // Boot
     loadSnapshot();
     connectWs();
     render();
