@@ -60,14 +60,21 @@ Get PigeonGraph running and configured in your editor in under 30 seconds:
 
 ### 1. Install
 
-```bash
-# Global install (recommended)
-npm install -g pigeongraph
+Install from source or through npm:
 
-# Or build from source
+```bash
+# Build from source (recommended)
 git clone https://github.com/Hoppy-Beast/pigeongraph.git
 cd pigeongraph && npm run setup
+
+# Or install globally from source
+npm run install:global
+
+# Global install from npm registry
+npm install -g pigeongraph
 ```
+Running `npm run setup` installs dependencies, compiles all packages, and links the `pigeongraph` executable globally.
+
 Requires [Node.js >= 22.5.0](https://nodejs.org) (Node 24 LTS recommended for native `node:sqlite`).
 
 ### 2. Register with your coding agents

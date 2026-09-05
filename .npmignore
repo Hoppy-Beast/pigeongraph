@@ -1,0 +1,17 @@
+# Node & Dependencies
+node_modules/
+npm-debug.log*
+
+# Test files & source
+packages/*/test/
+eval-sandbox/
+coverage/
+
+# Local databases & configs
+.pigeongraph/
+.cursor/
+.vscode/
+*.sqlite*
+*.db*
+*.tsbuildinfo
+.env*

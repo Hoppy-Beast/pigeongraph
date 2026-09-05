@@ -4,7 +4,6 @@
   "description": "Unified multi-layer code knowledge graph for AI coding agents combining real-time OS file monitoring, dynamic dispatch synthesis, and async multimodal document intelligence.",
   "author": "MD. Mahinur Rahman Prachurza (Hoppy-Beast)",
   "license": "MIT",
-  "private": true,
   "type": "module",
   "repository": {
     "type": "git",
@@ -31,6 +30,13 @@
   "workspaces": [
     "packages/*"
   ],
+  "files": [
+    "packages/*/dist/**/*",
+    "packages/*/package.json",
+    "templates",
+    "LICENSE",
+    "README.md"
+  ],
   "bin": {
     "pigeongraph": "./packages/pigeongraph-mcp/dist/cli.js"
   },
@@ -39,8 +45,8 @@
     "test": "npm run test:all",
     "test:all": "tsx --test packages/*/test/**/*.test.ts",
     "bench": "tsx packages/pigeongraph-mcp/eval/run-eval.ts",
-    "setup": "npm run build && npm link",
-    "install:global": "npm run build && npm install -g .",
+    "setup": "npm install && npm run build && npm link",
+    "install:global": "npm install && npm run build && npm install -g .",
     "uninstall:global": "npm unlink -g pigeongraph"
   },
   "devDependencies": {

@@ -3,12 +3,14 @@ import { resolve, join } from 'node:path';
 import { DynamicTokenBudgetGuard, type RepoTier } from './dynamic-budget-guard.js';
 import { EvalEngine, type ArmAResult, type ArmBResult } from './eval-engine.js';
 import { QualityScorer, type QualityScore } from './quality-scorer.js';
+import { FixtureManager } from './fixture-manager.js';
 
 interface BenchmarkRow {
   name: string;
   tier: RepoTier;
   language: string;
   repoPath: string;
+  gitUrl?: string;
   query: string;
   description: string;
 }
@@ -27,6 +29,7 @@ async function main() {
   });
 
   const engine = new EvalEngine();
+  const fixtureManager = new FixtureManager();
   const resultsDir = resolve('eval-sandbox', 'results');
   mkdirSync(resultsDir, { recursive: true });
 
@@ -36,6 +39,7 @@ async function main() {
       tier: 'small',
       language: 'Go',
       repoPath: resolve('eval-sandbox', 'repos', 'gin'),
+      gitUrl: 'https://github.com/gin-gonic/gin.git',
       query: 'handleHTTPRequest',
       description: 'HTTP router engine & middleware pipeline dispatch',
     },
@@ -44,6 +48,7 @@ async function main() {
       tier: 'small',
       language: 'Python',
       repoPath: resolve('eval-sandbox', 'repos', 'fastapi'),
+      gitUrl: 'https://github.com/fastapi/fastapi.git',
       query: 'solve_dependencies',
       description: 'Dependency injection resolution & lifecycle graph',
     },
@@ -133,18 +138,29 @@ async function main() {
     console.log(`▶ Evaluating: ${b.name} (${b.language}) [Tier: ${b.tier.toUpperCase()}]`);
     console.log(`  Query: "${b.query}" - ${b.description}`);
 
-    if (!existsSync(b.repoPath)) {
-      console.warn(`  ⚠️ Repo path not found: ${b.repoPath}, skipping.`);
-      continue;
+    let activeRepoPath = b.repoPath;
+    if (!existsSync(activeRepoPath)) {
+      if (b.gitUrl) {
+        try {
+          console.log(`  📦 Resolving fixture repository: ${b.name} (shallow clone)...`);
+          activeRepoPath = await fixtureManager.resolveRepo(b.name, { gitUrl: b.gitUrl });
+        } catch {
+          console.log(`  ℹ️ Fixture repository '${b.name}' not downloaded, skipping.`);
+          continue;
+        }
+      } else {
+        console.log(`  ℹ️ Fixture repository '${b.name}' not found, skipping.`);
+        continue;
+      }
     }
 
     try {
       console.log('  Running Arm A (Baseline grep & read)...');
-      const armA = await engine.runArmA(b.repoPath, b.query);
+      const armA = await engine.runArmA(activeRepoPath, b.query);
       console.log(`    Arm A: ${armA.turns} turns, ${armA.tokens.toLocaleString()} tokens, ${armA.duration_ms}ms`);
 
       console.log('  Running Arm B (PigeonGraph 1-shot explore)...');
-      const armB = await engine.runArmB(b.repoPath, b.query);
+      const armB = await engine.runArmB(activeRepoPath, b.query);
       console.log(`    Arm B: ${armB.turns} turn, ${armB.tokens.toLocaleString()} tokens, ${armB.duration_ms}ms`);
 
       budgetGuard.recordUsage(b.tier, armB.tokens);
