@@ -45,8 +45,24 @@ export class UiServer {
           }
         }
 
+        const lightweightNodes = nodes.map((node) => ({
+          id: node.id,
+          name: node.name,
+          kind: node.kind,
+          qualifiedName: node.qualifiedName,
+          substrate: {
+            language: node.substrate?.language,
+            sourceLocation: node.substrate?.sourceLocation,
+            symbolSignature: node.substrate?.symbolSignature,
+            outgoingEdges: node.substrate?.outgoingEdges,
+          },
+          versioning: {
+            semanticValidityHash: node.versioning?.semanticValidityHash,
+          },
+        }));
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ nodes, edges }));
+        res.end(JSON.stringify({ nodes: lightweightNodes, edges }));
         return;
       }
 

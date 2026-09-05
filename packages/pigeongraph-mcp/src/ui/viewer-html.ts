@@ -844,16 +844,11 @@ export function getViewerHtml(wsPort = 5051): string {
         updateCounts();
         reheat(1.0);
 
-        // Pre-run 120 physics ticks so graph spawns in a coherent shape
-        for (let i = 0; i < 120; i++) {
-          stepSimulation();
-        }
-
         // Frame graph automatically
         setTimeout(() => {
           fitToScreen();
           hasAutoFitted = true;
-        }, 80);
+        }, 120);
 
       } catch (err) {
         console.error('Failed to load initial graph snapshot:', err);
@@ -939,7 +934,10 @@ export function getViewerHtml(wsPort = 5051): string {
 
       const scaleX = availWidth / graphWidth;
       const scaleY = availHeight / graphHeight;
-      const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.25), 1.25);
+      const isHuge = nodeList.length > 1000;
+      const minAllowedZoom = isHuge ? 0.08 : 0.20;
+      const maxAllowedZoom = isHuge ? 0.55 : 1.15;
+      const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), minAllowedZoom), maxAllowedZoom);
 
       const centerX = (minX + maxX) / 2;
       const centerY = (minY + maxY) / 2;
@@ -966,22 +964,59 @@ export function getViewerHtml(wsPort = 5051): string {
       const nodeList = Array.from(nodes.values());
       const total = nodeList.length;
 
-      // 1. Softened Repulsion between all nodes
-      for (let i = 0; i < total; i++) {
-        const a = nodeList[i];
-        for (let j = i + 1; j < total; j++) {
-          const b = nodeList[j];
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const dist = Math.max(16, Math.hypot(dx, dy));
-          if (dist < 280) {
-            const force = ((k * k) / dist) * alpha * 0.12;
-            const fx = (dx / dist) * force;
-            const fy = (dy / dist) * force;
-            a.vx -= fx;
-            a.vy -= fy;
-            b.vx += fx;
-            b.vy += fy;
+      // 1. Softened Repulsion
+      if (total <= 600) {
+        for (let i = 0; i < total; i++) {
+          const a = nodeList[i];
+          for (let j = i + 1; j < total; j++) {
+            const b = nodeList[j];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const dist = Math.max(16, Math.hypot(dx, dy));
+            if (dist < 280) {
+              const force = ((k * k) / dist) * alpha * 0.12;
+              const fx = (dx / dist) * force;
+              const fy = (dy / dist) * force;
+              a.vx -= fx; a.vy -= fy;
+              b.vx += fx; b.vy += fy;
+            }
+          }
+        }
+      } else {
+        // Fast spatial bucketing for large graphs (e.g. 1,000 - 10,000+ nodes)
+        const cellSize = 160;
+        const grid = new Map();
+        for (let i = 0; i < total; i++) {
+          const n = nodeList[i];
+          const key = (Math.floor(n.x / cellSize) << 16) ^ Math.floor(n.y / cellSize);
+          let b = grid.get(key);
+          if (!b) { b = []; grid.set(key, b); }
+          b.push(n);
+        }
+        for (let i = 0; i < total; i++) {
+          const a = nodeList[i];
+          const cx = Math.floor(a.x / cellSize);
+          const cy = Math.floor(a.y / cellSize);
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+              const key = ((cx + dx) << 16) ^ (cy + dy);
+              const bucket = grid.get(key);
+              if (!bucket) continue;
+              for (let j = 0; j < bucket.length; j++) {
+                const b = bucket[j];
+                if (b.id <= a.id) continue;
+                const dX = b.x - a.x;
+                const dY = b.y - a.y;
+                const dist = Math.max(16, Math.hypot(dX, dY));
+                if (dist < 200) {
+                  const force = ((k * k) / dist) * alpha * 0.12;
+                  const fx = (dX / dist) * force;
+                  const fy = (dY / dist) * force;
+                  a.vx -= fx; a.vy -= fy;
+                  b.vx += fx; b.vy += fy;
+                }
+              }
+            }
           }
         }
       }
@@ -1158,8 +1193,10 @@ export function getViewerHtml(wsPort = 5051): string {
       ctx.globalAlpha = 1.0;
 
       // 2. Draw Nodes
-      const showAllLabels = zoom >= 1.25;
-      const showMidLabels = zoom >= 0.65;
+      const isHuge = nodes.size > 1000;
+      const showAllLabels = zoom >= (isHuge ? 1.6 : 1.25);
+      const showMidLabels = zoom >= (isHuge ? 1.1 : 0.65);
+      const fileZoomThreshold = isHuge ? 0.95 : 0.65;
 
       for (const n of nodes.values()) {
         const isMatch = searchQuery && n.name.toLowerCase().includes(searchQuery);
@@ -1209,7 +1246,7 @@ export function getViewerHtml(wsPort = 5051): string {
 
         // Level-of-Detail (LOD) Label
         const shouldShowLabel = isSelected || isHovered || isMatch ||
-          (n.kind === 'file' && zoom > 0.4) ||
+          (n.kind === 'file' && zoom > fileZoomThreshold) ||
           (showMidLabels && (n.kind === 'class' || n.kind === 'struct' || n.kind === 'route')) ||
           showAllLabels;
 
