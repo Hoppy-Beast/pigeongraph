@@ -2,6 +2,7 @@
 import { SuperGraphMcpServer } from './server.js';
 import { UiServer } from './ui/ui-server.js';
 import { PrAuditor } from './audit/pr-auditor.js';
+import { AgentInstaller } from './installer/agent-installer.js';
 import { SubstrateDaemon, AstExtractor } from '@pigeongraph/substrate';
 import { ClientGraphStore } from '@pigeongraph/client';
 import { createInterface } from 'node:readline';
@@ -159,16 +160,52 @@ Press Ctrl+C to stop.
     } else {
       console.log(auditResult.markdownReport);
     }
+  } else if (command === 'init') {
+    const res = AgentInstaller.initProject(projectRoot);
+    console.log(`
+🐦 PigeonGraph Project Initialized!
+📂 Project Root : ${projectRoot}
+⚙️  Config File  : ${res.configPath}
+🎯 Cursor Config: ${res.cursorMcpPath}
+
+Next steps:
+- Run 'pigeongraph install-mcp' to register with Claude Desktop & Cursor
+- Run 'pigeongraph explore <query>' to query code knowledge
+- Run 'pigeongraph ui' to open the live architecture canvas
+    `);
+  } else if (command === 'install-mcp' || command === 'install') {
+    const res = AgentInstaller.installMcp({ projectRoot });
+    console.log(`
+🐦 PigeonGraph MCP Registration
+===============================
+${res.claudeUpdated ? `✅ Claude Desktop config updated: ${res.claudePath}` : `⚠️  Claude Desktop config not updated (path: ${res.claudePath})`}
+${res.cursorUpdated ? `✅ Cursor MCP config updated: ${res.cursorPath}` : `⚠️  Cursor MCP config not updated (path: ${res.cursorPath})`}
+
+🎉 PigeonGraph is registered! Restart Claude Desktop or reload Cursor to start exploring.
+    `);
+  } else if (command === 'uninstall-mcp' || command === 'uninstall') {
+    const res = AgentInstaller.uninstallMcp({ projectRoot });
+    console.log(`
+🐦 PigeonGraph MCP Deregistration
+=================================
+${res.claudeUpdated ? `✅ Removed from Claude Desktop: ${res.claudePath}` : `ℹ️  Claude Desktop config unchanged.`}
+${res.cursorUpdated ? `✅ Removed from Cursor: ${res.cursorPath}` : `ℹ️  Cursor config unchanged.`}
+
+PigeonGraph MCP has been uninstalled.
+    `);
   } else {
     console.log(`
 🐦 PigeonGraph CLI v1.0.0
 Author: MD. Mahinur Rahman Prachurza (Hoppy-Beast)
 
 Commands:
-  pigeongraph serve-mcp         Start stdio Model Context Protocol (MCP) server
-  pigeongraph explore <q>       Query knowledge graph from terminal
+  pigeongraph init              Initialize .pigeongraph config & agent MCP files
+  pigeongraph install-mcp       Auto-register MCP with Claude Desktop & Cursor
+  pigeongraph uninstall-mcp     Remove MCP from Claude Desktop & Cursor
+  pigeongraph explore <q>       Query knowledge graph in 1 shot from terminal
   pigeongraph ui [--port 5052]  Launch live in-browser architecture visualizer
   pigeongraph audit-pr          Calculate PR blast radius and interface breaking risk
+  pigeongraph serve-mcp         Start stdio Model Context Protocol (MCP) server
     `);
   }
 }

@@ -23,14 +23,19 @@ PigeonGraph is an open-source, multi-layer code knowledge graph designed to give
    npm install
    ```
 
-3. **Build all packages:**
+3. **Build & link globally:**
    ```bash
-   npm run build
+   npm run setup
    ```
 
-4. **Run the test suite:**
+4. **Run the 32 unit & integration tests:**
    ```bash
    npm run test:all
+   ```
+
+5. **Run the multi-repo benchmark suite:**
+   ```bash
+   npm run bench
    ```
 
 ## Repository Structure
