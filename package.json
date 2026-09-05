@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "tsc -b",
-    "test": "node --test packages/*/test/**/*.test.mjs packages/*/test/**/*.test.js",
+    "test": "npm run test:all",
     "test:all": "tsx --test packages/*/test/**/*.test.ts"
   },
   "devDependencies": {
@@ -26,6 +26,6 @@
     "graphology": "^0.26.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.5.0"
   }
 }

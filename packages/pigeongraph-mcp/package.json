@@ -22,5 +22,8 @@
     "@pigeongraph/substrate": "1.0.0",
     "@pigeongraph/semantic": "1.0.0",
     "@pigeongraph/client": "1.0.0"
+  },
+  "engines": {
+    "node": ">=22.5.0"
   }
 }

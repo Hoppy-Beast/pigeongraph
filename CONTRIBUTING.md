@@ -7,14 +7,14 @@ PigeonGraph is an open-source, multi-layer code knowledge graph designed to give
 ## Development Setup
 
 ### Prerequisites
-- Node.js >= 20.0.0 (Node 24 recommended)
+- Node.js >= 22.5.0 (Node 24 recommended)
 - npm >= 10.0.0
 
 ### Getting Started
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/pigeongraph.git
+   git clone https://github.com/Hoppy-Beast/pigeongraph.git
    cd pigeongraph
    ```
 
@@ -38,11 +38,11 @@ PigeonGraph is an open-source, multi-layer code knowledge graph designed to give
 ```
 pigeongraph/
 ├── packages/
-│   ├── supergraph-schema/     # Formal Draft 2020-12 Schema, Invariant Hashes & Clocks
-│   ├── supergraph-substrate/  # Fast Substrate Engine (AST, Synthesizers, SQLite WAL, WS Streamer)
-│   ├── supergraph-semantic/   # Async Cognitive Worker (SQLite Queue, Defanger, ADR Synthesizer)
-│   ├── supergraph-client/     # In-Memory Graph Store, Dual-Buffer Reconciler, 1-Shot Explore
-│   └── supergraph-mcp/        # Stdio JSON-RPC MCP Server & CLI binary
+│   ├── pigeongraph-schema/     # Formal Draft 2020-12 Schema, Invariant Hashes & Clocks
+│   ├── pigeongraph-substrate/  # Fast Substrate Engine (AST, Synthesizers, SQLite WAL, WS Streamer)
+│   ├── pigeongraph-semantic/   # Async Cognitive Worker (SQLite Queue, Defanger, ADR Synthesizer)
+│   ├── pigeongraph-client/     # In-Memory Graph Store, Dual-Buffer Reconciler, 1-Shot Explore
+│   └── pigeongraph-mcp/        # Stdio JSON-RPC MCP Server & CLI binary
 ```
 
 ## Pull Request Guidelines
