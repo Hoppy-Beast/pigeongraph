@@ -1,3 +1,4 @@
+export * from './db/sqlite-adapter.js';
 export * from './db/database.js';
 export * from './parser/ast-extractor.js';
 export * from './parser/dynamic-synthesizer.js';

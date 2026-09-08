@@ -1,4 +1,8 @@
-import { DatabaseSync } from 'node:sqlite';
+import {
+  getDatabaseSyncConstructor,
+  type DatabaseSyncLike,
+  type StatementLike,
+} from './sqlite-adapter.js';
 import type { SuperNode, SubstrateEdge } from '@pigeongraph/schema';
 
 export interface FileRecord {
@@ -11,27 +15,28 @@ export interface FileRecord {
 }
 
 export class SubstrateDatabase {
-  private db: DatabaseSync;
+  private db: DatabaseSyncLike;
   private isInMemory: boolean;
 
   // Cached prepared statements for high-throughput batch operations
-  private upsertFileStmt!: ReturnType<DatabaseSync['prepare']>;
-  private getFileStmt!: ReturnType<DatabaseSync['prepare']>;
-  private deleteFileStmt!: ReturnType<DatabaseSync['prepare']>;
-  private upsertNodeStmt!: ReturnType<DatabaseSync['prepare']>;
-  private deleteFtsStmt!: ReturnType<DatabaseSync['prepare']>;
-  private insertFtsStmt!: ReturnType<DatabaseSync['prepare']>;
-  private deleteEdgesBySourceStmt!: ReturnType<DatabaseSync['prepare']>;
-  private upsertEdgeStmt!: ReturnType<DatabaseSync['prepare']>;
-  private getNodeStmt!: ReturnType<DatabaseSync['prepare']>;
-  private deleteNodeStmt!: ReturnType<DatabaseSync['prepare']>;
-  private deleteFtsNodeStmt!: ReturnType<DatabaseSync['prepare']>;
-  private deleteEdgesBySourceOrTargetStmt!: ReturnType<DatabaseSync['prepare']>;
-  private getNodesByFileStmt!: ReturnType<DatabaseSync['prepare']>;
-  private countNodesStmt!: ReturnType<DatabaseSync['prepare']>;
+  private upsertFileStmt!: StatementLike;
+  private getFileStmt!: StatementLike;
+  private deleteFileStmt!: StatementLike;
+  private upsertNodeStmt!: StatementLike;
+  private deleteFtsStmt!: StatementLike;
+  private insertFtsStmt!: StatementLike;
+  private deleteEdgesBySourceStmt!: StatementLike;
+  private upsertEdgeStmt!: StatementLike;
+  private getNodeStmt!: StatementLike;
+  private deleteNodeStmt!: StatementLike;
+  private deleteFtsNodeStmt!: StatementLike;
+  private deleteEdgesBySourceOrTargetStmt!: StatementLike;
+  private getNodesByFileStmt!: StatementLike;
+  private countNodesStmt!: StatementLike;
 
   constructor(dbPath: string = ':memory:') {
     this.isInMemory = dbPath === ':memory:';
+    const DatabaseSync = getDatabaseSyncConstructor();
     this.db = new DatabaseSync(dbPath);
     this.initPragmasAndSchema();
     this.initPreparedStatements();

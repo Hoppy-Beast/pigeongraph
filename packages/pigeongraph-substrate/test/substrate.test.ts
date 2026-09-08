@@ -5,6 +5,7 @@ import {
   AstExtractor,
   DynamicDispatchSynthesizer,
   WebSocketStreamer,
+  getDatabaseSyncConstructor,
 } from '../src/index.js';
 import { ClockManager, type SuperNode } from '@pigeongraph/schema';
 import WebSocket from 'ws';
@@ -463,5 +464,16 @@ Agents will spend fewer tokens on exploratory grepping.
 
     ws.close();
     await streamer.close();
+  });
+
+  test('getDatabaseSyncConstructor returns DatabaseSync with working sync API', () => {
+    const DatabaseSync = getDatabaseSyncConstructor();
+    assert.ok(DatabaseSync, 'Constructor must be returned');
+    const testDb = new DatabaseSync(':memory:');
+    testDb.exec('CREATE TABLE ping (id INT, msg TEXT);');
+    testDb.prepare('INSERT INTO ping VALUES (?, ?)').run(1, 'pong');
+    const row = testDb.prepare('SELECT msg FROM ping WHERE id = ?').get(1) as { msg: string };
+    assert.equal(row.msg, 'pong');
+    testDb.close();
   });
 });

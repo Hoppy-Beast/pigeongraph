@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { getDatabaseSyncConstructor, type DatabaseSyncLike } from '@pigeongraph/substrate';
 import { createHash } from 'node:crypto';
 
 export type JobPriority = 0 | 1 | 2 | 3;
@@ -20,9 +20,10 @@ export interface SemanticJob {
 }
 
 export class SQLiteSemanticQueue {
-  private db: DatabaseSync;
+  private db: DatabaseSyncLike;
 
   constructor(dbPath: string = ':memory:') {
+    const DatabaseSync = getDatabaseSyncConstructor();
     this.db = new DatabaseSync(dbPath);
     this.initSchema();
   }
