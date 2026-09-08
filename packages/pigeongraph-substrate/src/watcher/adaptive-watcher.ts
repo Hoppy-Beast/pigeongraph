@@ -46,10 +46,7 @@ export class AdaptiveWatcher {
     this.burstDebounceMs = options.burstDebounceMs ?? 1500;
 
     const defaultExcludes = [
-      'node_modules', 'dist', 'build', 'target', 'eval-sandbox',
-      'tests', 'test', '__tests__', 'docs', 'documentation',
-      'locale', 'locales', 'venv', '.venv', 'env', '.env',
-      '__pycache__', 'site-packages', 'vendor', '.tox', '.nox'
+      'node_modules', 'dist', 'build', 'target', '.git', 'eval-sandbox'
     ];
     this.excludedDirs = new Set(options.excludedDirs ?? defaultExcludes);
   }

@@ -63,18 +63,27 @@ You can test PigeonGraph directly in your browser with Google Colab, or install 
 
 ### 1. Install
 
-Install from source or through npm:
+You can install globally or run directly in an individual project:
 
 ```bash
-# Build from source (recommended)
+# Option A: Run in a single project with npx (no global install needed)
+npx pigeongraph init
+npx pigeongraph index
+npx pigeongraph explore "verifyToken"
+
+# Register project-level MCP for Cursor or Claude Code without global install
+npx pigeongraph install-mcp --mode npx
+
+# Option B: Add to a single project as a dev dependency
+npm install --save-dev pigeongraph
+npx pigeongraph index
+
+# Option C: Global install from npm registry
+npm install -g pigeongraph
+
+# Option D: Build and link from source
 git clone https://github.com/Hoppy-Beast/pigeongraph.git
 cd pigeongraph && npm run setup
-
-# Or install globally from source
-npm run install:global
-
-# Global install from npm registry
-npm install -g pigeongraph
 ```
 Running `npm run setup` installs dependencies, compiles all packages, and links the `pigeongraph` executable globally.
 
@@ -85,7 +94,11 @@ Requires [Node.js >= 22.5.0](https://nodejs.org) (Node 24 LTS recommended for na
 PigeonGraph configures Claude Desktop, Claude Code, Cursor, Google Antigravity, and Gemini CLI automatically:
 
 ```bash
+# Global binary registration
 pigeongraph install-mcp
+
+# Or local project registration using npx (no global install required)
+npx pigeongraph install-mcp --mode npx
 ```
 To remove the MCP registration later: `pigeongraph uninstall-mcp`
 
@@ -95,6 +108,13 @@ Generate `.pigeongraph/config.json`, `.cursor/mcp.json`, and `.mcp.json` in your
 ```bash
 pigeongraph init
 ```
+
+**Where files are stored:**
+PigeonGraph stores its configuration and compiled knowledge graph inside the `.pigeongraph/` folder in your project root:
+- `.pigeongraph/config.json`: Project configuration. By default, only build outputs and VCS artifacts are excluded (`node_modules`, `dist`, `build`, `target`, `.git`). All source code and test files are indexed. You can customize `excludedDirs` in this file to exclude more folders if needed.
+- `.pigeongraph/substrate.db`: Persistent SQLite database storing AST nodes, symbols, and relationship edges.
+
+*Note on hidden folders:* Because `.pigeongraph` starts with a dot, operating systems (Linux, macOS) and environments like Google Colab treat it as a hidden directory. In your terminal, run `ls -la .pigeongraph` (or `dir /a .pigeongraph` on Windows) to view the files.
 
 Build and persist the local code knowledge graph in `.pigeongraph/substrate.db`:
 ```bash
@@ -540,6 +560,27 @@ In PowerShell, a leading slash is treated as a filesystem root path. Run `pigeon
 <summary><b>Can multiple agents query PigeonGraph at the same time?</b></summary>
 
 Yes. The in-memory Graphology graph and Substrate SQLite WAL support concurrent read queries without locking.
+
+</details>
+
+<details>
+<summary><b>Can PigeonGraph operate on a single project without a global install?</b></summary>
+
+Yes. You do not need to install PigeonGraph globally. You can run commands directly with `npx pigeongraph <command>` or add it as a `devDependency` (`npm install --save-dev pigeongraph`). When registering MCP for Cursor or Claude Code, run `npx pigeongraph install-mcp --mode npx` to configure editor settings without any global binary.
+
+</details>
+
+<details>
+<summary><b>Where is the .pigeongraph directory and why is it not showing in my file tree?</b></summary>
+
+PigeonGraph stores project configuration and its SQLite database inside `.pigeongraph/` in your repository root. Because it begins with a dot (`.`), Linux, macOS, and tools like Google Colab hide it by default in file trees. You can inspect it in your terminal with `ls -la .pigeongraph` (or `dir /a .pigeongraph` on Windows) or by toggling hidden files in your file manager.
+
+</details>
+
+<details>
+<summary><b>What directories are excluded by default?</b></summary>
+
+By default, PigeonGraph only excludes common build artifacts and version control directories: `node_modules`, `dist`, `build`, `target`, and `.git`. All source code and test files are indexed. To exclude additional directories (such as docs or mock fixtures), edit the `excludedDirs` array in `.pigeongraph/config.json`.
 
 </details>
 
