@@ -14,10 +14,27 @@ export class SubstrateDatabase {
   private db: DatabaseSync;
   private isInMemory: boolean;
 
+  // Cached prepared statements for high-throughput batch operations
+  private upsertFileStmt!: ReturnType<DatabaseSync['prepare']>;
+  private getFileStmt!: ReturnType<DatabaseSync['prepare']>;
+  private deleteFileStmt!: ReturnType<DatabaseSync['prepare']>;
+  private upsertNodeStmt!: ReturnType<DatabaseSync['prepare']>;
+  private deleteFtsStmt!: ReturnType<DatabaseSync['prepare']>;
+  private insertFtsStmt!: ReturnType<DatabaseSync['prepare']>;
+  private deleteEdgesBySourceStmt!: ReturnType<DatabaseSync['prepare']>;
+  private upsertEdgeStmt!: ReturnType<DatabaseSync['prepare']>;
+  private getNodeStmt!: ReturnType<DatabaseSync['prepare']>;
+  private deleteNodeStmt!: ReturnType<DatabaseSync['prepare']>;
+  private deleteFtsNodeStmt!: ReturnType<DatabaseSync['prepare']>;
+  private deleteEdgesBySourceOrTargetStmt!: ReturnType<DatabaseSync['prepare']>;
+  private getNodesByFileStmt!: ReturnType<DatabaseSync['prepare']>;
+  private countNodesStmt!: ReturnType<DatabaseSync['prepare']>;
+
   constructor(dbPath: string = ':memory:') {
     this.isInMemory = dbPath === ':memory:';
     this.db = new DatabaseSync(dbPath);
     this.initPragmasAndSchema();
+    this.initPreparedStatements();
   }
 
   private initPragmasAndSchema(): void {
@@ -99,8 +116,8 @@ export class SubstrateDatabase {
     `);
   }
 
-  public upsertFile(file: FileRecord): void {
-    const stmt = this.db.prepare(`
+  private initPreparedStatements(): void {
+    this.upsertFileStmt = this.db.prepare(`
       INSERT INTO files (file_path, sha256, size_bytes, mtime_ms, language, last_parsed_epoch)
       VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(file_path) DO UPDATE SET
@@ -110,32 +127,11 @@ export class SubstrateDatabase {
         language = excluded.language,
         last_parsed_epoch = excluded.last_parsed_epoch;
     `);
-    stmt.run(file.filePath, file.sha256, file.sizeBytes, file.mtimeMs, file.language, file.lastParsedEpoch);
-  }
 
-  public getFile(filePath: string): FileRecord | null {
-    const stmt = this.db.prepare('SELECT * FROM files WHERE file_path = ?');
-    const row = stmt.get(filePath) as Record<string, unknown> | undefined;
-    if (!row) return null;
-    return {
-      filePath: row.file_path as string,
-      sha256: row.sha256 as string,
-      sizeBytes: row.size_bytes as number,
-      mtimeMs: row.mtime_ms as number,
-      language: row.language as string,
-      lastParsedEpoch: row.last_parsed_epoch as number,
-    };
-  }
+    this.getFileStmt = this.db.prepare('SELECT * FROM files WHERE file_path = ?');
+    this.deleteFileStmt = this.db.prepare('DELETE FROM files WHERE file_path = ?');
 
-  public removeFile(filePath: string): void {
-    this.deleteNodesByFile(filePath);
-    const stmt = this.db.prepare('DELETE FROM files WHERE file_path = ?');
-    stmt.run(filePath);
-  }
-
-  public upsertNode(node: SuperNode): void {
-    const jsonStr = JSON.stringify(node);
-    const stmt = this.db.prepare(`
+    this.upsertNodeStmt = this.db.prepare(`
       INSERT INTO nodes (
         id, urn, kind, name, qualified_name, repo_id, file_path, language,
         start_line, end_line, start_column, end_column,
@@ -170,7 +166,83 @@ export class SubstrateDatabase {
         updated_at_ms = excluded.updated_at_ms;
     `);
 
-    stmt.run(
+    this.deleteFtsStmt = this.db.prepare('DELETE FROM nodes_fts WHERE id = ?');
+    this.insertFtsStmt = this.db.prepare(`
+      INSERT INTO nodes_fts (id, name, qualified_name, symbol_signature, raw_docstring)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    this.deleteEdgesBySourceStmt = this.db.prepare('DELETE FROM edges WHERE source = ?');
+    this.upsertEdgeStmt = this.db.prepare(`
+      INSERT INTO edges (
+        source, target, kind, confidence, confidence_score,
+        provenance, dispatch_mechanism, line, col, metadata_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source, target, kind, IFNULL(line, -1), IFNULL(col, -1)) DO UPDATE SET
+        confidence = excluded.confidence,
+        confidence_score = excluded.confidence_score,
+        provenance = excluded.provenance,
+        dispatch_mechanism = excluded.dispatch_mechanism,
+        metadata_json = excluded.metadata_json;
+    `);
+
+    this.getNodeStmt = this.db.prepare('SELECT raw_json FROM nodes WHERE id = ?');
+    this.deleteNodeStmt = this.db.prepare('DELETE FROM nodes WHERE id = ?');
+    this.deleteFtsNodeStmt = this.db.prepare('DELETE FROM nodes_fts WHERE id = ?');
+    this.deleteEdgesBySourceOrTargetStmt = this.db.prepare('DELETE FROM edges WHERE source = ? OR target = ?');
+    this.getNodesByFileStmt = this.db.prepare('SELECT id FROM nodes WHERE file_path = ?');
+    this.countNodesStmt = this.db.prepare('SELECT COUNT(*) as cnt FROM nodes');
+  }
+
+  private inTransaction = false;
+
+  public runTransaction<T>(fn: () => T): T {
+    if (this.inTransaction) {
+      return fn();
+    }
+    this.inTransaction = true;
+    this.db.exec('BEGIN TRANSACTION;');
+    try {
+      const result = fn();
+      this.db.exec('COMMIT;');
+      return result;
+    } catch (err) {
+      try {
+        this.db.exec('ROLLBACK;');
+      } catch {
+        // ignore rollback error
+      }
+      throw err;
+    } finally {
+      this.inTransaction = false;
+    }
+  }
+
+  public upsertFile(file: FileRecord): void {
+    this.upsertFileStmt.run(file.filePath, file.sha256, file.sizeBytes, file.mtimeMs, file.language, file.lastParsedEpoch);
+  }
+
+  public getFile(filePath: string): FileRecord | null {
+    const row = this.getFileStmt.get(filePath) as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return {
+      filePath: row.file_path as string,
+      sha256: row.sha256 as string,
+      sizeBytes: row.size_bytes as number,
+      mtimeMs: row.mtime_ms as number,
+      language: row.language as string,
+      lastParsedEpoch: row.last_parsed_epoch as number,
+    };
+  }
+
+  public removeFile(filePath: string): void {
+    this.deleteNodesByFile(filePath);
+    this.deleteFileStmt.run(filePath);
+  }
+
+  public upsertNode(node: SuperNode): void {
+    const jsonStr = JSON.stringify(node);
+    this.upsertNodeStmt.run(
       node.id,
       node.urn,
       node.kind,
@@ -199,11 +271,8 @@ export class SubstrateDatabase {
     );
 
     // Sync FTS
-    this.db.prepare('DELETE FROM nodes_fts WHERE id = ?').run(node.id);
-    this.db.prepare(`
-      INSERT INTO nodes_fts (id, name, qualified_name, symbol_signature, raw_docstring)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(
+    this.deleteFtsStmt.run(node.id);
+    this.insertFtsStmt.run(
       node.id,
       node.name,
       node.qualifiedName,
@@ -212,22 +281,9 @@ export class SubstrateDatabase {
     );
 
     // Sync edges
-    this.db.prepare('DELETE FROM edges WHERE source = ?').run(node.id);
-    const edgeStmt = this.db.prepare(`
-      INSERT INTO edges (
-        source, target, kind, confidence, confidence_score,
-        provenance, dispatch_mechanism, line, col, metadata_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(source, target, kind, IFNULL(line, -1), IFNULL(col, -1)) DO UPDATE SET
-        confidence = excluded.confidence,
-        confidence_score = excluded.confidence_score,
-        provenance = excluded.provenance,
-        dispatch_mechanism = excluded.dispatch_mechanism,
-        metadata_json = excluded.metadata_json;
-    `);
-
+    this.deleteEdgesBySourceStmt.run(node.id);
     for (const edge of node.substrate.outgoingEdges) {
-      edgeStmt.run(
+      this.upsertEdgeStmt.run(
         node.id,
         edge.targetId,
         edge.kind,
@@ -243,24 +299,28 @@ export class SubstrateDatabase {
   }
 
   public getNode(id: string): SuperNode | null {
-    const stmt = this.db.prepare('SELECT raw_json FROM nodes WHERE id = ?');
-    const row = stmt.get(id) as { raw_json: string } | undefined;
+    const row = this.getNodeStmt.get(id) as { raw_json: string } | undefined;
     if (!row) return null;
     return JSON.parse(row.raw_json) as SuperNode;
   }
 
   public deleteNode(id: string): void {
-    this.db.prepare('DELETE FROM nodes_fts WHERE id = ?').run(id);
-    this.db.prepare('DELETE FROM edges WHERE source = ? OR target = ?').run(id, id);
-    this.db.prepare('DELETE FROM nodes WHERE id = ?').run(id);
+    this.deleteFtsNodeStmt.run(id);
+    this.deleteEdgesBySourceOrTargetStmt.run(id, id);
+    this.deleteNodeStmt.run(id);
   }
 
   public deleteNodesByFile(filePath: string): string[] {
-    const rows = this.db.prepare('SELECT id FROM nodes WHERE file_path = ?').all(filePath) as Array<{ id: string }>;
+    const rows = this.getNodesByFileStmt.all(filePath) as Array<{ id: string }>;
+    if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
-    for (const id of ids) {
-      this.deleteNode(id);
-    }
+    this.runTransaction(() => {
+      for (const id of ids) {
+        this.deleteFtsNodeStmt.run(id);
+        this.deleteEdgesBySourceOrTargetStmt.run(id, id);
+        this.deleteNodeStmt.run(id);
+      }
+    });
     return ids;
   }
 
@@ -326,7 +386,7 @@ export class SubstrateDatabase {
   }
 
   public countNodes(): number {
-    const row = this.db.prepare('SELECT COUNT(*) as cnt FROM nodes').get() as { cnt: number };
+    const row = this.countNodesStmt.get() as { cnt: number };
     return row.cnt;
   }
 

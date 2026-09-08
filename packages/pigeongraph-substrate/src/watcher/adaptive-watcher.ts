@@ -15,6 +15,7 @@ export interface AdaptiveWatcherOptions {
   clockManager: ClockManager;
   loneDebounceMs?: number;
   burstDebounceMs?: number;
+  excludedDirs?: string[];
 }
 
 export class AdaptiveWatcher {
@@ -25,6 +26,7 @@ export class AdaptiveWatcher {
   private clockManager: ClockManager;
   private loneDebounceMs: number;
   private burstDebounceMs: number;
+  private excludedDirs: Set<string>;
 
   private extractor = new AstExtractor();
   private synthesizer = new DynamicDispatchSynthesizer();
@@ -42,6 +44,14 @@ export class AdaptiveWatcher {
     this.clockManager = options.clockManager;
     this.loneDebounceMs = options.loneDebounceMs ?? 150;
     this.burstDebounceMs = options.burstDebounceMs ?? 1500;
+
+    const defaultExcludes = [
+      'node_modules', 'dist', 'build', 'target', 'eval-sandbox',
+      'tests', 'test', '__tests__', 'docs', 'documentation',
+      'locale', 'locales', 'venv', '.venv', 'env', '.env',
+      '__pycache__', 'site-packages', 'vendor', '.tox', '.nox'
+    ];
+    this.excludedDirs = new Set(options.excludedDirs ?? defaultExcludes);
   }
 
   public async scanProject(targetDir = this.projectRoot): Promise<void> {
@@ -53,14 +63,7 @@ export class AdaptiveWatcher {
         const entries = await readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
           const name = entry.name;
-          if (
-            name.startsWith('.') ||
-            name === 'node_modules' ||
-            name === 'dist' ||
-            name === 'build' ||
-            name === 'target' ||
-            name === 'eval-sandbox'
-          ) {
+          if (name.startsWith('.') || this.excludedDirs.has(name)) {
             continue;
           }
           const full = join(dir, name);
@@ -89,14 +92,9 @@ export class AdaptiveWatcher {
       if (!filename) return;
       const normalizedPath = filename.replace(/\\/g, '/');
 
-      // Filter out ignored paths (.git, node_modules, dist, etc.)
-      if (
-        normalizedPath.includes('.git/') ||
-        normalizedPath.includes('node_modules/') ||
-        normalizedPath.includes('/dist/') ||
-        normalizedPath.includes('.temp') ||
-        normalizedPath.includes('eval-sandbox/')
-      ) {
+      // Filter out ignored directories
+      const segments = normalizedPath.split('/');
+      if (segments.some((seg) => seg.startsWith('.') || this.excludedDirs.has(seg))) {
         return;
       }
 
@@ -132,6 +130,18 @@ export class AdaptiveWatcher {
     const mutations: GraphMutation[] = [];
     const allBatchNodes: SuperNode[] = [];
     const fileContents = new Map<string, string>();
+    const filesToDelete: string[] = [];
+
+    interface FileParsedUpdate {
+      relPath: string;
+      content: string;
+      mtimeMs: number;
+      sizeBytes: number;
+      fileHash: string;
+      nodes: SuperNode[];
+      edges: any[];
+    }
+    const updatesToApply: FileParsedUpdate[] = [];
 
     for (const relPath of filesToProcess) {
       const absPath = join(this.projectRoot, relPath);
@@ -142,24 +152,28 @@ export class AdaptiveWatcher {
       try {
         const fileStat = await stat(absPath);
         if (fileStat.isDirectory()) continue;
-        content = await readFile(absPath, 'utf8');
         mtimeMs = fileStat.mtimeMs;
         sizeBytes = fileStat.size;
       } catch {
-        // File was deleted
-        const deletedIds = this.db.deleteNodesByFile(relPath);
-        this.db.removeFile(relPath);
-        for (const id of deletedIds) {
-          mutations.push({ type: 'NodeDelete', nodeId: id });
-        }
-        mutations.push({ type: 'FileDelete', filePath: relPath });
+        filesToDelete.push(relPath);
+        continue;
+      }
+
+      // Fast mtime & size bypass check
+      const prevFile = this.db.getFile(relPath);
+      if (prevFile && prevFile.mtimeMs === mtimeMs && prevFile.sizeBytes === sizeBytes) {
+        continue;
+      }
+
+      try {
+        content = await readFile(absPath, 'utf8');
+      } catch {
+        filesToDelete.push(relPath);
         continue;
       }
 
       fileContents.set(relPath, content);
 
-      // Check if content hash changed
-      const prevFile = this.db.getFile(relPath);
       const { nodes, edges, fileHash } = this.extractor.parseFile({
         repoId: this.repoId,
         filePath: relPath,
@@ -169,29 +183,58 @@ export class AdaptiveWatcher {
       });
 
       if (prevFile && prevFile.sha256 === fileHash) {
-        // Skip un-modified file content
+        this.db.upsertFile({
+          filePath: relPath,
+          sha256: fileHash,
+          sizeBytes,
+          mtimeMs,
+          language: nodes[0]?.substrate.language ?? 'plaintext',
+          lastParsedEpoch: prevFile.lastParsedEpoch,
+        });
         continue;
       }
 
-      // Upsert into DB
-      this.db.upsertFile({
-        filePath: relPath,
-        sha256: fileHash,
-        sizeBytes,
+      updatesToApply.push({
+        relPath,
+        content,
         mtimeMs,
-        language: nodes[0]?.substrate.language ?? 'plaintext',
-        lastParsedEpoch: this.currentEpoch,
+        sizeBytes,
+        fileHash,
+        nodes,
+        edges,
       });
-
-      // Clear old nodes for this file
-      this.db.deleteNodesByFile(relPath);
-
-      for (const node of nodes) {
-        this.db.upsertNode(node);
-        mutations.push({ type: 'NodeUpsert', node });
-        allBatchNodes.push(node);
-      }
     }
+
+    // Apply database updates and deletions in a single transaction
+    this.db.runTransaction(() => {
+      for (const delPath of filesToDelete) {
+        const deletedIds = this.db.deleteNodesByFile(delPath);
+        this.db.removeFile(delPath);
+        for (const id of deletedIds) {
+          mutations.push({ type: 'NodeDelete', nodeId: id });
+        }
+        mutations.push({ type: 'FileDelete', filePath: delPath });
+      }
+
+      for (const update of updatesToApply) {
+        this.db.upsertFile({
+          filePath: update.relPath,
+          sha256: update.fileHash,
+          sizeBytes: update.sizeBytes,
+          mtimeMs: update.mtimeMs,
+          language: update.nodes[0]?.substrate.language ?? 'plaintext',
+          lastParsedEpoch: this.currentEpoch,
+        });
+
+        this.db.deleteNodesByFile(update.relPath);
+
+        for (const node of update.nodes) {
+          this.db.upsertNode(node);
+          mutations.push({ type: 'NodeUpsert', node });
+          allBatchNodes.push(node);
+        }
+      }
+    });
 
     // Dynamic Dispatch Synthesis across batch
     if (allBatchNodes.length > 0) {

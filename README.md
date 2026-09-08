@@ -89,17 +89,29 @@ pigeongraph install-mcp
 ```
 To remove the MCP registration later: `pigeongraph uninstall-mcp`
 
-### 3. Initialize your project
+### 3. Initialize and index your project
 
 Generate `.pigeongraph/config.json`, `.cursor/mcp.json`, and `.mcp.json` in your workspace:
 ```bash
 pigeongraph init
 ```
 
+Build and persist the local code knowledge graph in `.pigeongraph/substrate.db`:
+```bash
+# Build the index (incremental, skips unchanged files)
+pigeongraph index
+
+# Force a full rebuild
+pigeongraph index --force
+```
+
 ### 4. Basic commands
 
 ```bash
-# Query the architecture in a single turn
+# Build or update the code knowledge graph
+pigeongraph index
+
+# Query the architecture in a single turn (sub-50ms repeat latency)
 pigeongraph explore "verifyToken"
 
 # Start the web visualizer (http://127.0.0.1:5052)

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { existsSync, readFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { SuperGraphMcpServer } from './server.js';
 import { UiServer } from './ui/ui-server.js';
 import { PrAuditor } from './audit/pr-auditor.js';
@@ -38,10 +40,37 @@ async function main() {
   const projectRoot = process.cwd();
   const repoId = projectRoot.split(/[/\\]/).pop() ?? 'workspace';
 
-  const wsPort = process.env.PIGEONGRAPH_WS_PORT ? parseInt(process.env.PIGEONGRAPH_WS_PORT, 10) : undefined;
-  const dbPath = process.env.PIGEONGRAPH_DB_PATH || undefined;
-  const loneDebounceMs = process.env.PIGEONGRAPH_LONE_DEBOUNCE_MS ? parseInt(process.env.PIGEONGRAPH_LONE_DEBOUNCE_MS, 10) : undefined;
-  const burstDebounceMs = process.env.PIGEONGRAPH_BURST_DEBOUNCE_MS ? parseInt(process.env.PIGEONGRAPH_BURST_DEBOUNCE_MS, 10) : undefined;
+  const configPath = join(projectRoot, '.pigeongraph', 'config.json');
+  let config: any = {};
+  if (existsSync(configPath)) {
+    try {
+      config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    } catch {
+      // ignore config read errors
+    }
+  }
+
+  const wsPort = process.env.PIGEONGRAPH_WS_PORT
+    ? parseInt(process.env.PIGEONGRAPH_WS_PORT, 10)
+    : config.wsPort;
+
+  const defaultDbDir = join(projectRoot, '.pigeongraph');
+  if (!existsSync(defaultDbDir)) {
+    try {
+      mkdirSync(defaultDbDir, { recursive: true });
+    } catch {
+      // ignore
+    }
+  }
+
+  const dbPath = process.env.PIGEONGRAPH_DB_PATH || join(defaultDbDir, 'substrate.db');
+  const loneDebounceMs = process.env.PIGEONGRAPH_LONE_DEBOUNCE_MS
+    ? parseInt(process.env.PIGEONGRAPH_LONE_DEBOUNCE_MS, 10)
+    : config.loneDebounceMs;
+  const burstDebounceMs = process.env.PIGEONGRAPH_BURST_DEBOUNCE_MS
+    ? parseInt(process.env.PIGEONGRAPH_BURST_DEBOUNCE_MS, 10)
+    : config.burstDebounceMs;
+  const excludedDirs = config.excludedDirs;
 
   const daemonOptions = {
     projectRoot,
@@ -50,6 +79,7 @@ async function main() {
     dbPath,
     loneDebounceMs,
     burstDebounceMs,
+    excludedDirs,
   };
 
   if (command === 'serve-mcp') {
@@ -75,14 +105,47 @@ async function main() {
       await daemon.stop();
       process.exit(0);
     });
+  } else if (command === 'index') {
+    const isForce = args.includes('--force');
+    const { rmSync } = await import('node:fs');
+    if (isForce && existsSync(dbPath)) {
+      try {
+        rmSync(dbPath, { force: true });
+        rmSync(`${dbPath}-wal`, { force: true });
+        rmSync(`${dbPath}-shm`, { force: true });
+      } catch {
+        // ignore
+      }
+    }
+
+    const t0 = performance.now();
+    console.log(`⚡ Indexing codebase: ${projectRoot}...`);
+    const daemon = new SubstrateDaemon(daemonOptions);
+    await daemon.watcher.scanProject();
+    const elapsed = Math.round(performance.now() - t0);
+    const nodeCount = daemon.db.countNodes();
+
+    console.log(`
+🐦 PigeonGraph Indexing Completed!
+📂 Project Root : ${projectRoot}
+📊 Total Nodes  : ${nodeCount}
+⏱️ Duration    : ${elapsed}ms
+💾 Database     : ${dbPath}
+    `);
+    await daemon.stop();
   } else if (command === 'explore') {
-    const query = args.slice(1).join(' ');
+    const isRefresh = args.includes('--refresh') || args.includes('--reindex');
+    const cleanArgs = args.slice(1).filter((a) => a !== '--refresh' && a !== '--reindex');
+    const query = cleanArgs.join(' ');
     if (!query) {
-      console.error('Usage: pigeongraph explore <query>');
+      console.error('Usage: pigeongraph explore <query> [--refresh]');
       process.exit(1);
     }
     const daemon = new SubstrateDaemon(daemonOptions);
-    await daemon.watcher.scanProject();
+    const existingNodes = daemon.db.countNodes();
+    if (existingNodes === 0 || isRefresh) {
+      await daemon.watcher.scanProject();
+    }
 
     const server = new SuperGraphMcpServer({ projectRoot, repoId, daemon });
     const result = server.handleToolCall('pigeongraph_explore', { query });
@@ -239,9 +302,10 @@ Author: MD. Mahinur Rahman Prachurza (Hoppy-Beast)
 
 Commands:
   pigeongraph init              Initialize .pigeongraph config & agent MCP files
+  pigeongraph index [--force]   Build & persist code knowledge graph
+  pigeongraph explore <q>       Query knowledge graph in 1 shot from terminal
   pigeongraph install-mcp       Auto-register MCP with Claude Desktop & Cursor
   pigeongraph uninstall-mcp     Remove MCP from Claude Desktop & Cursor
-  pigeongraph explore <q>       Query knowledge graph in 1 shot from terminal
   pigeongraph ui [--port 5052]  Launch live in-browser architecture visualizer
   pigeongraph audit-pr          Calculate PR blast radius and interface breaking risk
   pigeongraph serve-mcp         Start stdio Model Context Protocol (MCP) server

@@ -303,7 +303,12 @@ export class AgentInstaller {
         uiPort: 5052,
         loneDebounceMs: 150,
         burstDebounceMs: 1500,
-        excludedDirs: ['node_modules', 'dist', 'build', '.git', 'eval-sandbox'],
+        excludedDirs: [
+          'node_modules', 'dist', 'build', 'target', '.git', 'eval-sandbox',
+          'tests', 'test', '__tests__', 'docs', 'documentation',
+          'locale', 'locales', 'venv', '.venv', 'env', '.env',
+          '__pycache__', 'site-packages', 'vendor', '.tox', '.nox'
+        ],
       };
       AgentInstaller.safeWriteJson(configPath, defaultConfig);
     }

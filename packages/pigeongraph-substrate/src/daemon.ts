@@ -10,6 +10,7 @@ export interface SubstrateDaemonOptions {
   wsPort?: number;
   loneDebounceMs?: number;
   burstDebounceMs?: number;
+  excludedDirs?: string[];
 }
 
 export class SubstrateDaemon {
@@ -34,6 +35,7 @@ export class SubstrateDaemon {
       clockManager: this.clockManager,
       loneDebounceMs: options.loneDebounceMs,
       burstDebounceMs: options.burstDebounceMs,
+      excludedDirs: options.excludedDirs,
     });
   }
 
