@@ -49,16 +49,23 @@
     "install:global": "npm install && npm run build && npm install -g .",
     "uninstall:global": "npm unlink -g pigeongraph"
   },
+  "dependencies": {
+    "@pigeongraph/client": "1.0.0",
+    "@pigeongraph/mcp": "1.0.0",
+    "@pigeongraph/schema": "1.0.0",
+    "@pigeongraph/semantic": "1.0.0",
+    "@pigeongraph/substrate": "1.0.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "graphology": "^0.26.0",
+    "ws": "^8.18.0",
+    "zod": "^3.23.8"
+  },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/ws": "^8.5.10",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "ws": "^8.18.0",
-    "zod": "^3.23.8",
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
-    "graphology": "^0.26.0"
+    "typescript": "^5.7.2"
   },
   "engines": {
     "node": ">=22.5.0"
