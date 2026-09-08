@@ -26,7 +26,6 @@ PigeonGraph follows these security rules:
 If you find a security issue in PigeonGraph, report it through one of the following channels:
 
 - Preferred: Use [GitHub Private Vulnerability Reporting](https://github.com/Hoppy-Beast/pigeongraph/security/advisories/new).
-- Alternative: Email the author at `hoppy.beast.dev@gmail.com` with the subject line `[SECURITY] PigeonGraph Vulnerability Report`.
 
 Please include:
 - A description of the vulnerability and its potential impact.
