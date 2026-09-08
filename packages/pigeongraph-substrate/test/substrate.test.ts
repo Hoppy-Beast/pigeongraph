@@ -104,6 +104,50 @@ describe('Substrate Layer Engine Tests', () => {
     assert.equal(handlerNode?.kind, 'function');
   });
 
+  test('AstExtractor parses Markdown documents into structured document and section nodes with invariants', () => {
+    const mdContent = `# 8. Testing Architecture
+
+## Context
+We are evaluating automated AST and knowledge graph indexing.
+
+## Decision
+Adopt PigeonGraph as the single-turn MCP exploration server for coding agents.
+- invariant: All symbols must resolve in sub-50ms latency.
+- invariant: Blast radius calculations must isolate breaking signature alterations.
+
+## Consequences
+Agents will spend fewer tokens on exploratory grepping.
+`;
+
+    const { nodes, edges } = extractor.parseFile({
+      repoId: 'test-repo',
+      filePath: 'docs/adr/0008-testing.md',
+      content: mdContent,
+      epoch: 1,
+      lamportClock: 1,
+    });
+
+    assert.ok(nodes.length >= 4, `Expected at least 4 nodes (file + 4 headings), got ${nodes.length}`);
+
+    const docNode = nodes.find((n) => n.kind === 'document');
+    assert.ok(docNode, 'Document H1 node must exist');
+    assert.equal(docNode?.name, '8. Testing Architecture');
+
+    const decisionSection = nodes.find((n) => n.name === 'Decision');
+    assert.ok(decisionSection, 'Decision section must exist');
+    assert.equal(decisionSection?.kind, 'section');
+    assert.ok(decisionSection?.substrate.sourceLocation.startLine > 1);
+
+    // Verify invariants were extracted
+    const invariants = decisionSection?.semantic.rationaleNodes?.[0]?.invariants;
+    assert.ok(invariants && invariants.length === 2, 'Invariants must be extracted');
+    assert.ok(invariants[0].includes('sub-50ms latency'));
+
+    // Verify CONTAINS edge from file to section
+    const containsDecision = edges.some((e) => e.edge.kind === 'CONTAINS' && e.targetId === decisionSection?.id);
+    assert.ok(containsDecision, 'File must have CONTAINS edge to Decision section');
+  });
+
   test('AstExtractor parses Go structs, receiver methods, packages, and call graph', () => {
     const goCode = `
       package server

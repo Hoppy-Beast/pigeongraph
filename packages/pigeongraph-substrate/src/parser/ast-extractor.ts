@@ -4,6 +4,7 @@ import {
   computeSemanticValidityHash,
   type SuperNode,
   type SubstrateEdge,
+  type NodeKind,
 } from '@pigeongraph/schema';
 
 export interface ParseOptions {
@@ -99,6 +100,9 @@ export class AstExtractor {
       case 'rust':
         this.parseRust(options, lines, fileNode, nodes, edges);
         break;
+      case 'markdown':
+        this.parseMarkdown(options, lines, fileNode, nodes, edges);
+        break;
       default:
         this.parseGeneric(options, lines, fileNode, nodes, edges);
         break;
@@ -132,6 +136,9 @@ export class AstExtractor {
       case 'cpp':
       case 'hpp':
         return 'cpp';
+      case 'md':
+      case 'markdown':
+        return 'markdown';
       default:
         return 'plaintext';
     }
@@ -1101,6 +1108,133 @@ export class AstExtractor {
           }
         }
       }
+    }
+  }
+
+  private parseMarkdown(
+    options: ParseOptions,
+    lines: string[],
+    fileNode: SuperNode,
+    nodes: SuperNode[],
+    edges: Array<{ sourceId: string; targetId: string; edge: SubstrateEdge }>
+  ): void {
+    const { repoId, filePath, epoch, lamportClock } = options;
+
+    interface SectionHeading {
+      title: string;
+      level: number;
+      lineNum: number;
+    }
+
+    const headings: SectionHeading[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const match = line.match(/^(#{1,6})\s+(.+)$/);
+      if (match) {
+        headings.push({
+          level: match[1].length,
+          title: match[2].trim(),
+          lineNum: i + 1,
+        });
+      }
+    }
+
+    for (let h = 0; h < headings.length; h++) {
+      const heading = headings[h];
+      const startLine = heading.lineNum;
+      let endLine = lines.length;
+      for (let next = h + 1; next < headings.length; next++) {
+        if (headings[next].level <= heading.level) {
+          endLine = headings[next].lineNum - 1;
+          break;
+        }
+      }
+
+      const sectionLines = lines.slice(startLine - 1, endLine);
+      const sectionContent = sectionLines.join('\n');
+      const sectionName = heading.title;
+      const sectionKind: NodeKind = heading.level === 1 ? 'document' : 'section';
+      const sectionNodeId = `sg://${repoId}/${filePath}#${sectionName.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+
+      const invariants: string[] = [];
+      for (const sline of sectionLines) {
+        const invMatch = sline.match(/^[-*]\s*invariant:\s*(.+)$/i);
+        if (invMatch) {
+          invariants.push(invMatch[1].trim());
+        }
+      }
+
+      const sectionNode: SuperNode = {
+        id: sectionNodeId,
+        urn: `urn:supergraph:${repoId}:${filePath}#${sectionName}`,
+        kind: sectionKind,
+        name: sectionName,
+        qualifiedName: `${filePath}#${sectionName}`,
+        repoId,
+        versioning: {
+          lamportClock,
+          vectorClock: { substrate: lamportClock },
+          layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
+          contentSha256: computeContentHash(sectionContent),
+          astStructuralHash: computeAstStructuralHash(sectionContent),
+          semanticValidityHash: computeSemanticValidityHash({
+            name: sectionName,
+            kind: sectionKind,
+            signature: `#${'#'.repeat(heading.level - 1)} ${sectionName}`,
+          }),
+          lastModifiedTimestampMs: Date.now(),
+        },
+        substrate: {
+          sourceLocation: {
+            filePath,
+            startLine,
+            startColumn: 0,
+            endLine,
+            endColumn: (lines[endLine - 1] ?? '').length,
+          },
+          language: 'markdown',
+          symbolSignature: `#${'#'.repeat(heading.level - 1)} ${sectionName}`,
+          visibility: 'public',
+          rawDocstring: sectionContent.slice(0, 1500),
+          outgoingEdges: [],
+          astEpochTimestamp: new Date().toISOString(),
+        },
+        semantic: {
+          validityStatus: 'VALID',
+          communityClusters: [],
+          semanticEmbeddings: [],
+          rationaleNodes: invariants.length > 0 ? [{
+            purpose: sectionName,
+            architecturalPattern: 'Markdown Architectural Section',
+            invariants,
+          }] : [],
+        },
+        processFlow: {
+          isEntryPoint: heading.level === 1,
+          entryPointScore: heading.level === 1 ? 0.8 : 0.2,
+          processFlowSequences: [],
+          crossRepoContracts: [],
+        },
+      };
+
+      const containsEdge: SubstrateEdge = {
+        targetId: sectionNodeId,
+        kind: 'CONTAINS',
+        confidence: 'EXTRACTED',
+        confidenceScore: 1.0,
+        provenance: 'tree-sitter-ast',
+        location: {
+          filePath,
+          startLine,
+          startColumn: 0,
+          endLine,
+          endColumn: (lines[endLine - 1] ?? '').length,
+        },
+      };
+
+      fileNode.substrate.outgoingEdges.push(containsEdge);
+      edges.push({ sourceId: fileNode.id, targetId: sectionNodeId, edge: containsEdge });
+      nodes.push(sectionNode);
     }
   }
 
