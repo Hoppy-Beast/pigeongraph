@@ -149,7 +149,7 @@ export class AstExtractor {
     const classRegex = /^\s*(?:export\s+)?(?:abstract\s+)?class\s+([a-zA-Z0-9_$]+)(?:\s+extends\s+([a-zA-Z0-9_$]+))?(?:\s+implements\s+([^{]+))?/i;
     const importRegex = /^\s*import\s+(?:\{([^}]+)\}|([a-zA-Z0-9_$]+))\s+from\s+['"]([^'"]+)['"]/i;
     const functionRegex = /^\s*(?:export\s+)?(?:async\s+)?function\s+([a-zA-Z0-9_$]+)\s*(?:\(([^)]*)\))?/i;
-    const arrowFnRegex = /^\s*(?:export\s+)?(?:const|let)\s+([a-zA-Z0-9_$]+)\s*=\s*(?:async\s*)?(?:<[^>]+>\s*)?(?:\([^)]*\)|[a-zA-Z0-9_$]+|\()/i;
+    const arrowFnRegex = /^\s*(?:export\s+)?(?:const|let)\s+([a-zA-Z0-9_$]+)(?:\s*:\s*[^=]+)?\s*=\s*(?:async\s*)?(?:<[^>]+>\s*)?(?:\([^)]*\)|[a-zA-Z0-9_$]+|\()/i;
 
     let currentClassNode: SuperNode | null = null;
     let braceDepth = 0;

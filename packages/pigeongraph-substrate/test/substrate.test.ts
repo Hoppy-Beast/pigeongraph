@@ -72,6 +72,38 @@ describe('Substrate Layer Engine Tests', () => {
     assert.ok(fnNode.versioning.semanticValidityHash.length === 64);
   });
 
+  test('AstExtractor parses typed TypeScript/React components and typed arrow functions', () => {
+    const tsxCode = `
+      interface Props {
+        children: React.ReactNode;
+      }
+
+      export const ProtectedRoute: React.FC<Props> = ({ children }) => {
+        return <div className="protected">{children}</div>;
+      };
+
+      export const handleApiCall: ApiHandler<string> = async (req, res) => {
+        return res.json({ ok: true });
+      };
+    `;
+
+    const { nodes } = extractor.parseFile({
+      repoId: 'test-repo',
+      filePath: 'src/components/ProtectedRoute.tsx',
+      content: tsxCode,
+      epoch: 1,
+      lamportClock: 1,
+    });
+
+    const routeNode = nodes.find((n) => n.name === 'ProtectedRoute');
+    const handlerNode = nodes.find((n) => n.name === 'handleApiCall');
+
+    assert.ok(routeNode, 'ProtectedRoute must be parsed as a node');
+    assert.equal(routeNode?.kind, 'function');
+    assert.ok(handlerNode, 'handleApiCall must be parsed as a node');
+    assert.equal(handlerNode?.kind, 'function');
+  });
+
   test('AstExtractor parses Go structs, receiver methods, packages, and call graph', () => {
     const goCode = `
       package server

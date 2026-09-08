@@ -76,11 +76,11 @@ export class AgentInstaller {
       return { command: 'npx', args: ['-y', 'pigeongraph', 'serve-mcp'] };
     }
 
-    if (mode === 'global' || (mode === 'auto' && platform() !== 'darwin' && AgentInstaller.isGlobalBinaryAvailable())) {
+    if (mode === 'global' || (mode === 'auto' && platform() !== 'darwin' && platform() !== 'win32' && AgentInstaller.isGlobalBinaryAvailable())) {
       return { command: 'pigeongraph', args: ['serve-mcp'] };
     }
 
-    // Default to absolute node path for GUI apps (prevents ENOENT / command not found)
+    // Default to absolute node path for GUI apps (prevents ENOENT / command not found on Windows and macOS)
     const cliPath = AgentInstaller.resolveCliPath();
     if (cliPath) {
       return { command: process.execPath, args: [cliPath, 'serve-mcp'] };
@@ -303,36 +303,28 @@ export class AgentInstaller {
         uiPort: 5052,
         loneDebounceMs: 150,
         burstDebounceMs: 1500,
-        excludedDirs: ['node_modules', 'dist', 'build', 'target', '.git', 'eval-sandbox'],
+        excludedDirs: [] as string[],
       };
       AgentInstaller.safeWriteJson(configPath, defaultConfig);
     }
 
     const cursorMcpPath = AgentInstaller.getCursorConfigPath(projectRoot);
-    if (!existsSync(cursorMcpPath)) {
-      const cursorConfig = {
-        mcpServers: {
-          pigeongraph: {
-            command: 'pigeongraph',
-            args: ['serve-mcp'],
-          },
-        },
-      };
-      AgentInstaller.safeWriteJson(cursorMcpPath, cursorConfig);
-    }
+    const cursorJson = AgentInstaller.safeReadJson(cursorMcpPath);
+    cursorJson.mcpServers = cursorJson.mcpServers || {};
+    cursorJson.mcpServers.pigeongraph = {
+      command: 'pigeongraph',
+      args: ['serve-mcp'],
+    };
+    AgentInstaller.safeWriteJson(cursorMcpPath, cursorJson);
 
     const claudeCodeMcpPath = AgentInstaller.getClaudeCodeProjectMcpPath(projectRoot);
-    if (!existsSync(claudeCodeMcpPath)) {
-      const claudeCodeConfig = {
-        mcpServers: {
-          pigeongraph: {
-            command: 'pigeongraph',
-            args: ['serve-mcp'],
-          },
-        },
-      };
-      AgentInstaller.safeWriteJson(claudeCodeMcpPath, claudeCodeConfig);
-    }
+    const claudeJson = AgentInstaller.safeReadJson(claudeCodeMcpPath);
+    claudeJson.mcpServers = claudeJson.mcpServers || {};
+    claudeJson.mcpServers.pigeongraph = {
+      command: 'pigeongraph',
+      args: ['serve-mcp'],
+    };
+    AgentInstaller.safeWriteJson(claudeCodeMcpPath, claudeJson);
 
     return {
       configPath,

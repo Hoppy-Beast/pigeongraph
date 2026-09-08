@@ -1,7 +1,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, rmSync, readFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, rmSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { AgentInstaller } from '../src/installer/agent-installer.js';
 
@@ -98,5 +98,24 @@ describe('AgentInstaller Tests', () => {
     const config = JSON.parse(readFileSync(initRes.configPath, 'utf-8'));
     assert.equal(config.wsPort, 5051);
     assert.equal(config.loneDebounceMs, 150);
+    assert.deepEqual(config.excludedDirs, []);
+  });
+
+  test('initializes project merging into pre-existing MCP configs without overwriting', () => {
+    const mergeProject = join(testDir, 'merge-app');
+    const cursorMcp = AgentInstaller.getCursorConfigPath(mergeProject);
+    mkdirSync(dirname(cursorMcp), { recursive: true });
+    writeFileSync(
+      cursorMcp,
+      JSON.stringify({ mcpServers: { codegraph: { command: 'codegraph', args: ['run'] } } }, null, 2)
+    );
+
+    const initRes = AgentInstaller.initProject(mergeProject);
+    const cursorJson = JSON.parse(readFileSync(initRes.cursorMcpPath, 'utf-8'));
+
+    assert.ok(cursorJson.mcpServers.codegraph, 'Pre-existing tool should be preserved');
+    assert.ok(cursorJson.mcpServers.pigeongraph, 'PigeonGraph should be added');
+    assert.equal(cursorJson.mcpServers.codegraph.command, 'codegraph');
+    assert.equal(cursorJson.mcpServers.pigeongraph.command, 'pigeongraph');
   });
 });

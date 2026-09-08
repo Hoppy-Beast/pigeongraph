@@ -111,7 +111,7 @@ pigeongraph init
 
 **Where files are stored:**
 PigeonGraph stores its configuration and compiled knowledge graph inside the `.pigeongraph/` folder in your project root:
-- `.pigeongraph/config.json`: Project configuration. By default, only build outputs and VCS artifacts are excluded (`node_modules`, `dist`, `build`, `target`, `.git`). All source code and test files are indexed. You can customize `excludedDirs` in this file to exclude more folders if needed.
+- `.pigeongraph/config.json`: Project configuration. By default, `excludedDirs` is empty (`[]`), giving you full control. Dot-prefixed directories (such as `.git` and `.pigeongraph`) are automatically ignored. You can add folders to `excludedDirs` in this file whenever needed.
 - `.pigeongraph/substrate.db`: Persistent SQLite database storing AST nodes, symbols, and relationship edges.
 
 *Note on hidden folders:* Because `.pigeongraph` starts with a dot, operating systems (Linux, macOS) and environments like Google Colab treat it as a hidden directory. In your terminal, run `ls -la .pigeongraph` (or `dir /a .pigeongraph` on Windows) to view the files.
@@ -580,7 +580,7 @@ PigeonGraph stores project configuration and its SQLite database inside `.pigeon
 <details>
 <summary><b>What directories are excluded by default?</b></summary>
 
-By default, PigeonGraph only excludes common build artifacts and version control directories: `node_modules`, `dist`, `build`, `target`, and `.git`. All source code and test files are indexed. To exclude additional directories (such as docs or mock fixtures), edit the `excludedDirs` array in `.pigeongraph/config.json`.
+By default, the `excludedDirs` array in `.pigeongraph/config.json` is empty (`[]`), leaving directory exclusion entirely up to you. Dot-prefixed directories (such as `.git` and `.pigeongraph`) are always ignored automatically. All other directories, source files, documentation, and tests are indexed unless you explicitly add them to `excludedDirs`.
 
 </details>
 

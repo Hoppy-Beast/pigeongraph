@@ -45,9 +45,7 @@ export class AdaptiveWatcher {
     this.loneDebounceMs = options.loneDebounceMs ?? 150;
     this.burstDebounceMs = options.burstDebounceMs ?? 1500;
 
-    const defaultExcludes = [
-      'node_modules', 'dist', 'build', 'target', '.git', 'eval-sandbox'
-    ];
+    const defaultExcludes: string[] = [];
     this.excludedDirs = new Set(options.excludedDirs ?? defaultExcludes);
   }
 
