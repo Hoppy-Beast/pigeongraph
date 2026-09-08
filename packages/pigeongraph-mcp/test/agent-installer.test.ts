@@ -98,7 +98,9 @@ describe('AgentInstaller Tests', () => {
     const config = JSON.parse(readFileSync(initRes.configPath, 'utf-8'));
     assert.equal(config.wsPort, 5051);
     assert.equal(config.loneDebounceMs, 150);
-    assert.deepEqual(config.excludedDirs, []);
+    assert.ok(config.excludedDirs.includes('node_modules'));
+    assert.ok(config.excludedDirs.includes('.git'));
+    assert.ok(!config.excludedDirs.includes('docs'));
   });
 
   test('initializes project merging into pre-existing MCP configs without overwriting', () => {
@@ -116,6 +118,6 @@ describe('AgentInstaller Tests', () => {
     assert.ok(cursorJson.mcpServers.codegraph, 'Pre-existing tool should be preserved');
     assert.ok(cursorJson.mcpServers.pigeongraph, 'PigeonGraph should be added');
     assert.equal(cursorJson.mcpServers.codegraph.command, 'codegraph');
-    assert.equal(cursorJson.mcpServers.pigeongraph.command, 'pigeongraph');
+    assert.ok(cursorJson.mcpServers.pigeongraph.command);
   });
 });

@@ -111,10 +111,19 @@ pigeongraph init
 
 **Where files are stored:**
 PigeonGraph stores its configuration and compiled knowledge graph inside the `.pigeongraph/` folder in your project root:
-- `.pigeongraph/config.json`: Project configuration. By default, `excludedDirs` is empty (`[]`), giving you full control. Dot-prefixed directories (such as `.git` and `.pigeongraph`) are automatically ignored. You can add folders to `excludedDirs` in this file whenever needed.
+- `.pigeongraph/config.json`: Project configuration. By default, standard build and dependency directories (`node_modules`, `.git`, `dist`, `build`, `.venv`, `__pycache__`) are safely excluded, while all documentation (`docs`) remains fully indexed.
 - `.pigeongraph/substrate.db`: Persistent SQLite database storing AST nodes, symbols, and relationship edges.
 
 *Note on hidden folders:* Because `.pigeongraph` starts with a dot, operating systems (Linux, macOS) and environments like Google Colab treat it as a hidden directory. In your terminal, run `ls -la .pigeongraph` (or `dir /a .pigeongraph` on Windows) to view the files.
+
+#### Windows & GUI IDE Setup (Cursor, Claude Desktop)
+On Windows, GUI applications (Cursor, Claude Desktop) do not spawn processes inside a shell by default.
+- When you run `pigeongraph init` or `pigeongraph install-mcp`, PigeonGraph automatically configures executable paths (`node.exe` with CLI path, or `pigeongraph.cmd`) to avoid `ENOENT` spawn errors.
+- If configuring manually in `.cursor/mcp.json` or `claude_desktop_config.json` on Windows, use `pigeongraph.cmd` instead of bare `pigeongraph`, or invoke `node` with the absolute path to `cli.js`:
+  ```json
+  "command": "pigeongraph.cmd",
+  "args": ["serve-mcp"]
+  ```
 
 Build and persist the local code knowledge graph in `.pigeongraph/substrate.db`:
 ```bash

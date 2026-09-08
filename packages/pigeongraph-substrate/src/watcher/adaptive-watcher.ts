@@ -45,7 +45,19 @@ export class AdaptiveWatcher {
     this.loneDebounceMs = options.loneDebounceMs ?? 150;
     this.burstDebounceMs = options.burstDebounceMs ?? 1500;
 
-    const defaultExcludes: string[] = [];
+    const defaultExcludes: string[] = [
+      'node_modules',
+      '.git',
+      'dist',
+      'build',
+      '.venv',
+      'venv',
+      '__pycache__',
+      '.next',
+      '.nuxt',
+      '.turbo',
+      '.cache',
+    ];
     this.excludedDirs = new Set(options.excludedDirs ?? defaultExcludes);
   }
 

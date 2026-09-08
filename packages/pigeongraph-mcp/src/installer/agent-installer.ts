@@ -86,7 +86,11 @@ export class AgentInstaller {
       return { command: process.execPath, args: [cliPath, 'serve-mcp'] };
     }
 
-    // Safe fallback
+    // Windows fallback
+    if (platform() === 'win32') {
+      return { command: 'pigeongraph.cmd', args: ['serve-mcp'] };
+    }
+
     return { command: 'pigeongraph', args: ['serve-mcp'] };
   }
 
@@ -303,17 +307,31 @@ export class AgentInstaller {
         uiPort: 5052,
         loneDebounceMs: 150,
         burstDebounceMs: 1500,
-        excludedDirs: [] as string[],
+        excludedDirs: [
+          'node_modules',
+          '.git',
+          'dist',
+          'build',
+          '.venv',
+          'venv',
+          '__pycache__',
+          '.next',
+          '.nuxt',
+          '.turbo',
+          '.cache',
+        ] as string[],
       };
       AgentInstaller.safeWriteJson(configPath, defaultConfig);
     }
+
+    const resolved = AgentInstaller.resolveCommand('auto');
 
     const cursorMcpPath = AgentInstaller.getCursorConfigPath(projectRoot);
     const cursorJson = AgentInstaller.safeReadJson(cursorMcpPath);
     cursorJson.mcpServers = cursorJson.mcpServers || {};
     cursorJson.mcpServers.pigeongraph = {
-      command: 'pigeongraph',
-      args: ['serve-mcp'],
+      command: resolved.command,
+      args: resolved.args,
     };
     AgentInstaller.safeWriteJson(cursorMcpPath, cursorJson);
 
@@ -321,8 +339,8 @@ export class AgentInstaller {
     const claudeJson = AgentInstaller.safeReadJson(claudeCodeMcpPath);
     claudeJson.mcpServers = claudeJson.mcpServers || {};
     claudeJson.mcpServers.pigeongraph = {
-      command: 'pigeongraph',
-      args: ['serve-mcp'],
+      command: resolved.command,
+      args: resolved.args,
     };
     AgentInstaller.safeWriteJson(claudeCodeMcpPath, claudeJson);
 

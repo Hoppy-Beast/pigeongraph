@@ -317,10 +317,18 @@ export class AstExtractor {
             methodName !== 'for' &&
             methodName !== 'new'
           ) {
-            const afterParen = trimmed.substring(parenIdx + 1);
-            const closeParenIdx = afterParen.indexOf(')');
-            const paramsRaw = closeParenIdx !== -1 ? afterParen.substring(0, closeParenIdx) : '';
-            const afterClose = closeParenIdx !== -1 ? afterParen.substring(closeParenIdx + 1).trim() : '';
+            let methodSig = trimmed;
+            if (!methodSig.includes('{') && !methodSig.includes(';') && (trimmed.includes('(') || trimmed.includes('<'))) {
+              for (let k = i + 1; k < Math.min(lines.length, i + 10); k++) {
+                methodSig += ' ' + lines[k].trim();
+                if (lines[k].includes('{') || lines[k].trim().endsWith(';')) break;
+              }
+            }
+
+            const mParenStart = methodSig.indexOf('(');
+            const mParenEnd = methodSig.lastIndexOf(')');
+            const paramsRaw = mParenStart !== -1 && mParenEnd > mParenStart ? methodSig.substring(mParenStart + 1, mParenEnd) : '';
+            const afterClose = mParenEnd !== -1 ? methodSig.substring(mParenEnd + 1).trim() : '';
             const returnType = afterClose.startsWith(':') ? afterClose.substring(1).replace(/[{;].*$/, '').trim() : undefined;
 
             const methodNodeId = `sg://${repoId}/${filePath}#${currentClassNode.name}.${methodName}`;
@@ -405,15 +413,45 @@ export class AstExtractor {
     }
 
       // Top-level Function or Arrow Function
-      const fnMatch = line.match(functionRegex) ?? line.match(arrowFnRegex);
+      let combinedSig = trimmed;
+      if (
+        (trimmed.startsWith('export ') || trimmed.startsWith('async ') || trimmed.startsWith('function ') ||
+         trimmed.startsWith('const ') || trimmed.startsWith('let ') || trimmed.startsWith('default ')) &&
+        (trimmed.includes('(') || trimmed.includes('<') || trimmed.includes(':') || trimmed.includes('=')) &&
+        !trimmed.includes('{') &&
+        !trimmed.endsWith(';')
+      ) {
+        for (let k = i + 1; k < Math.min(lines.length, i + 15); k++) {
+          const nextTrimmed = lines[k].trim();
+          combinedSig += ' ' + nextTrimmed;
+          if (nextTrimmed.includes('{') || nextTrimmed.includes('=>') || nextTrimmed.endsWith(';')) {
+            break;
+          }
+        }
+      }
+
+      const fnMatch = combinedSig.match(functionRegex) ?? combinedSig.match(arrowFnRegex);
       if (fnMatch && !currentClassNode) {
         const fnName = fnMatch[1];
-        const paramsRaw = fnMatch[2];
-        const returnType = fnMatch[3]?.trim();
-        const fnNodeId = `sg://${repoId}/${filePath}#${fnName}`;
+        let paramsRaw = fnMatch[2];
+        let returnType = fnMatch[3]?.trim();
 
-        const isExported = line.includes('export');
-        const isAsync = line.includes('async');
+        if (paramsRaw === undefined) {
+          const parenStart = combinedSig.indexOf('(');
+          const parenEnd = combinedSig.lastIndexOf(')');
+          if (parenStart !== -1 && parenEnd > parenStart) {
+            paramsRaw = combinedSig.substring(parenStart + 1, parenEnd);
+          }
+        }
+
+        if (returnType) {
+          returnType = returnType.replace(/[{;=].*$/, '').trim();
+        }
+
+        const fnNodeId = `sg://${repoId}/${filePath}#${fnName}`;
+        const isExported = combinedSig.includes('export');
+        const isAsync = combinedSig.includes('async');
+        const cleanSig = combinedSig.replace(/\s*[{;]\s*$/, '').trim();
 
         let fnEndLine = lineNum;
         let fnBraces = 0;
@@ -447,7 +485,7 @@ export class AstExtractor {
             semanticValidityHash: computeSemanticValidityHash({
               name: fnName,
               kind: 'function',
-              signature: line.trim(),
+              signature: cleanSig,
               returnType,
               modifiers: [
                 ...(isExported ? ['exported'] : []),
@@ -460,12 +498,12 @@ export class AstExtractor {
             sourceLocation: {
               filePath,
               startLine: lineNum,
-              startColumn: line.indexOf(fnName),
+              startColumn: line.indexOf(fnName) !== -1 ? line.indexOf(fnName) : 0,
               endLine: fnEndLine,
               endColumn: 1,
             },
             language: 'typescript',
-            symbolSignature: line.trim(),
+            symbolSignature: cleanSig,
             visibility: isExported ? 'public' : 'internal',
             modifiers: [
               ...(isExported ? ['exported' as const] : []),
@@ -550,6 +588,39 @@ export class AstExtractor {
       const defMatch = line.match(defRegex);
       if (defMatch) {
         const fnName = defMatch[1];
+        let pySig = line.trim();
+        let pySigEndLine = lineNum;
+        if (!pySig.includes('):') && !pySig.includes(') ->') && !pySig.endsWith(':')) {
+          for (let k = i + 1; k < Math.min(lines.length, i + 15); k++) {
+            pySig += ' ' + lines[k].trim();
+            pySigEndLine = k + 1;
+            if (lines[k].includes('):') || lines[k].includes(') ->') || lines[k].trim().endsWith(':')) {
+              break;
+            }
+          }
+        }
+
+        const parenStart = pySig.indexOf('(');
+        const parenEnd = pySig.lastIndexOf(')');
+        const paramsRaw = parenStart !== -1 && parenEnd > parenStart ? pySig.substring(parenStart + 1, parenEnd) : '';
+        const afterParen = parenEnd !== -1 ? pySig.substring(parenEnd + 1) : '';
+        const returnTypeMatch = afterParen.match(/->\s*([^:]+):/);
+        const returnType = returnTypeMatch ? returnTypeMatch[1].trim() : undefined;
+
+        const baseIndent = line.search(/\S/);
+        let fnEndLine = pySigEndLine;
+        for (let j = pySigEndLine; j < lines.length; j++) {
+          const l = lines[j];
+          if (!l.trim() || l.trim().startsWith('#')) continue;
+          const indent = l.search(/\S/);
+          if (indent !== -1 && indent <= baseIndent) {
+            fnEndLine = j;
+            break;
+          }
+          fnEndLine = j + 1;
+        }
+
+        const fnContent = lines.slice(i, fnEndLine).join('\n');
         const qname = currentClass ? `${currentClass}.${fnName}` : fnName;
         const fnNodeId = `sg://${repoId}/${filePath}#${qname}`;
         const fnNode: SuperNode = {
@@ -563,16 +634,18 @@ export class AstExtractor {
             lamportClock,
             vectorClock: { substrate: lamportClock },
             layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
-            contentSha256: computeContentHash(line),
-            astStructuralHash: computeAstStructuralHash(line),
-            semanticValidityHash: computeSemanticValidityHash({ name: fnName, kind: 'function', signature: line.trim() }),
+            contentSha256: computeContentHash(fnContent),
+            astStructuralHash: computeAstStructuralHash(fnContent),
+            semanticValidityHash: computeSemanticValidityHash({ name: fnName, kind: 'function', signature: pySig, returnType }),
             lastModifiedTimestampMs: Date.now(),
           },
           substrate: {
-            sourceLocation: { filePath, startLine: lineNum, startColumn: line.indexOf(fnName), endLine: lineNum + 4, endColumn: 1 },
+            sourceLocation: { filePath, startLine: lineNum, startColumn: line.indexOf(fnName) !== -1 ? line.indexOf(fnName) : 0, endLine: fnEndLine, endColumn: 1 },
             language: 'python',
-            symbolSignature: line.trim(),
+            symbolSignature: pySig,
             visibility: fnName.startsWith('_') ? 'private' : 'public',
+            returnType,
+            parameters: this.parseParameters(paramsRaw),
             outgoingEdges: [],
             astEpochTimestamp: new Date().toISOString(),
           },
@@ -1240,11 +1313,15 @@ export class AstExtractor {
 
   private parseParameters(paramsRaw?: string): Array<{ name: string; type: string }> {
     if (!paramsRaw || !paramsRaw.trim()) return [];
-    return paramsRaw.split(',').map((param) => {
-      const parts = param.split(':');
-      const name = parts[0]?.trim().replace(/^[^a-zA-Z0-9_$]+/, '') ?? 'arg';
-      const type = parts[1]?.trim() ?? 'any';
-      return { name, type };
-    });
+    return paramsRaw
+      .split(',')
+      .map((param) => {
+        const parts = param.split(':');
+        const rawName = parts[0]?.trim().replace(/^[^a-zA-Z0-9_$]+/, '') ?? 'arg';
+        const name = rawName.replace(/[?]$/, '').replace(/=.*$/, '').trim();
+        const type = (parts[1]?.trim().replace(/=.*$/, '').trim()) || 'any';
+        return { name, type };
+      })
+      .filter((p) => p.name && p.name !== 'self' && p.name !== 'cls');
   }
 }

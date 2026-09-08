@@ -105,6 +105,78 @@ describe('Substrate Layer Engine Tests', () => {
     assert.equal(handlerNode?.kind, 'function');
   });
 
+  test('AstExtractor parses multi-line function signatures and parameters in TypeScript and Python', () => {
+    const multiLineTs = `
+      export async function calculateMetrics<
+        T extends Record<string, unknown>
+      >(
+        primaryInput: string,
+        secondaryOptions: T,
+        threshold?: number
+      ): Promise<Map<string, T>> {
+        return new Map();
+      }
+
+      export const multiLineArrow = async (
+        userId: string,
+        roles: string[],
+        dryRun: boolean = false
+      ): Promise<boolean> => {
+        return true;
+      };
+    `;
+
+    const { nodes: tsNodes } = extractor.parseFile({
+      repoId: 'test-repo',
+      filePath: 'src/metrics.ts',
+      content: multiLineTs,
+      epoch: 1,
+      lamportClock: 1,
+    });
+
+    const calcFn = tsNodes.find((n) => n.name === 'calculateMetrics');
+    assert.ok(calcFn, 'calculateMetrics must be found despite multi-line signature');
+    assert.equal(calcFn?.kind, 'function');
+    assert.ok(calcFn?.substrate.parameters.some((p) => p.name === 'primaryInput'));
+    assert.ok(calcFn?.substrate.parameters.some((p) => p.name === 'secondaryOptions'));
+    assert.ok(calcFn?.substrate.parameters.some((p) => p.name === 'threshold'));
+
+    const arrowFn = tsNodes.find((n) => n.name === 'multiLineArrow');
+    assert.ok(arrowFn, 'multiLineArrow must be found despite multi-line signature');
+    assert.ok(arrowFn?.substrate.parameters.some((p) => p.name === 'userId'));
+    assert.ok(arrowFn?.substrate.parameters.some((p) => p.name === 'roles'));
+
+    // Python multi-line
+    const multiLinePy = `
+def analyze_dataset(
+    dataframe,
+    batch_size: int = 128,
+    use_cuda: bool = True
+) -> dict:
+    result = {}
+    return result
+
+def next_function():
+    pass
+    `;
+
+    const { nodes: pyNodes } = extractor.parseFile({
+      repoId: 'test-repo',
+      filePath: 'src/analyze.py',
+      content: multiLinePy,
+      epoch: 1,
+      lamportClock: 1,
+    });
+
+    const pyFn = pyNodes.find((n) => n.name === 'analyze_dataset');
+    assert.ok(pyFn, 'analyze_dataset must be found despite multi-line signature');
+    assert.equal(pyFn?.kind, 'function');
+    assert.ok(pyFn?.substrate.parameters.some((p) => p.name === 'dataframe'));
+    assert.ok(pyFn?.substrate.parameters.some((p) => p.name === 'batch_size'));
+    assert.equal(pyFn?.substrate.returnType, 'dict');
+    assert.ok(pyFn?.substrate.sourceLocation.endLine >= 7, 'Python endLine must encompass function body');
+  });
+
   test('AstExtractor parses Markdown documents into structured document and section nodes with invariants', () => {
     const mdContent = `# 8. Testing Architecture
 

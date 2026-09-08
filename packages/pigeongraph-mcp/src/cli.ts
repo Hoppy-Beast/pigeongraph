@@ -124,11 +124,20 @@ async function main() {
     await daemon.watcher.scanProject();
     const elapsed = Math.round(performance.now() - t0);
     const nodeCount = daemon.db.countNodes();
+    const allNodes = daemon.db.getAllNodes();
+    const codeSymbols = allNodes.filter((n) =>
+      ['function', 'method', 'class', 'interface', 'struct'].includes(n.kind)
+    ).length;
+    const docSections = allNodes.filter((n) => n.kind === 'section' || n.kind === 'document').length;
+    const filesCount = allNodes.filter((n) => n.kind === 'file').length;
 
     console.log(`
 🐦 PigeonGraph Indexing Completed!
 📂 Project Root : ${projectRoot}
 📊 Total Nodes  : ${nodeCount}
+   • Code Symbols     : ${codeSymbols} (functions, methods, classes, structs)
+   • Markdown Sections: ${docSections} (architecture, specs, invariants)
+   • Files Indexed    : ${filesCount}
 ⏱️ Duration    : ${elapsed}ms
 💾 Database     : ${dbPath}
     `);
@@ -297,7 +306,7 @@ PigeonGraph MCP has been uninstalled.
     console.log(`
 \x1b[38;5;215m${DOT_LOGO}\x1b[0m
 
-🐦 PigeonGraph CLI v1.0.3
+🐦 PigeonGraph CLI v1.0.4
 Author: MD. Mahinur Rahman Prachurza (Hoppy-Beast)
 
 Commands:
