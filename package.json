@@ -1,6 +1,6 @@
 {
   "name": "pigeongraph",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Unified multi-layer code knowledge graph for AI coding agents combining real-time OS file monitoring, dynamic dispatch synthesis, and async multimodal document intelligence.",
   "author": "MD. Mahinur Rahman Prachurza (Hoppy-Beast)",
   "license": "MIT",
@@ -31,17 +31,16 @@
     "packages/*"
   ],
   "files": [
-    "packages/*/dist/**/*",
-    "packages/*/package.json",
+    "dist",
     "templates",
     "LICENSE",
     "README.md"
   ],
   "bin": {
-    "pigeongraph": "./packages/pigeongraph-mcp/dist/cli.js"
+    "pigeongraph": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc -b && node -e \"try{require('node:fs').chmodSync('packages/pigeongraph-mcp/dist/cli.js',0o755)}catch{}\"",
+    "build": "tsc -b && node build.js",
     "test": "npm run test:all",
     "test:all": "tsx --test packages/*/test/**/*.test.ts",
     "bench": "tsx packages/pigeongraph-mcp/eval/run-eval.ts",
@@ -50,11 +49,6 @@
     "uninstall:global": "npm unlink -g pigeongraph"
   },
   "dependencies": {
-    "@pigeongraph/client": "1.0.0",
-    "@pigeongraph/mcp": "1.0.0",
-    "@pigeongraph/schema": "1.0.0",
-    "@pigeongraph/semantic": "1.0.0",
-    "@pigeongraph/substrate": "1.0.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "graphology": "^0.26.0",
@@ -64,6 +58,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/ws": "^8.5.10",
+    "esbuild": "^0.28.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   },
