@@ -538,6 +538,28 @@ Agents will spend fewer tokens on exploratory grepping.
     await streamer.close();
   });
 
+  test('WebSocketStreamer automatically falls back to next available port on EADDRINUSE', async () => {
+    const port = 5120;
+    const streamer1 = new WebSocketStreamer({
+      port,
+      projectRoot: process.cwd(),
+      clockManager: clock,
+    });
+    const boundPort1 = await streamer1.start();
+    assert.equal(boundPort1, 5120);
+
+    const streamer2 = new WebSocketStreamer({
+      port,
+      projectRoot: process.cwd(),
+      clockManager: clock,
+    });
+    const boundPort2 = await streamer2.start();
+    assert.equal(boundPort2, 5121, 'Second streamer must automatically bind to 5121');
+
+    await streamer1.close();
+    await streamer2.close();
+  });
+
   test('getDatabaseSyncConstructor returns DatabaseSync with working sync API', () => {
     const DatabaseSync = getDatabaseSyncConstructor();
     assert.ok(DatabaseSync, 'Constructor must be returned');

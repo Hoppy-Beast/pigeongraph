@@ -39,9 +39,10 @@ export class SubstrateDaemon {
     });
   }
 
-  public async start(): Promise<void> {
-    await this.streamer.start();
+  public async start(): Promise<number> {
+    const boundWsPort = await this.streamer.start();
     this.watcher.start();
+    return boundWsPort;
   }
 
   public async stop(): Promise<void> {

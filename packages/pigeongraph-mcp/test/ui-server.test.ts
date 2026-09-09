@@ -73,4 +73,17 @@ describe('PigeonGraph Live Canvas UI Server Tests', () => {
     const json = await res.json() as any;
     assert.equal(json.status, 'ok');
   });
+
+  test('UiServer automatically falls back to next available port on EADDRINUSE', async () => {
+    const srv1 = new UiServer({ store, wsPort: 5051 });
+    const bound1 = await srv1.start(5130);
+    assert.equal(bound1, 5130);
+
+    const srv2 = new UiServer({ store, wsPort: 5051 });
+    const bound2 = await srv2.start(5130);
+    assert.equal(bound2, 5131, 'Second UiServer must automatically bind to 5131');
+
+    await srv1.close();
+    await srv2.close();
+  });
 });

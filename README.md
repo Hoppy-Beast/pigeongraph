@@ -57,96 +57,110 @@ Everything runs locally with zero telemetry, requires no external database proce
 
 ## Quickstart and setup
 
-You can test PigeonGraph directly in your browser with Google Colab, or install locally:
+You can run PigeonGraph directly in Google Colab, execute it on a single project with `npx`, or install it globally.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Hoppy-Beast/pigeongraph/blob/main/assets/pigeongraph_demo.ipynb)
 
-### 1. Install
+### Workflow A: Zero install with npx (Fastest for single projects)
 
-You can install globally or run directly in an individual project:
+Run PigeonGraph in any codebase without installing it globally:
 
 ```bash
-# Option A: Run in a single project with npx (no global install needed)
+# 1. Initialize configuration and editor MCP files (.cursor/mcp.json)
 npx pigeongraph init
+
+# 2. Index your repository into .pigeongraph/substrate.db
 npx pigeongraph index
+
+# 3. Query symbols or execution flows in a single turn
 npx pigeongraph explore "verifyToken"
 
-# Register project-level MCP for Cursor or Claude Code without global install
+# 4. Open the live architecture visualizer
+npx pigeongraph ui
+
+# 5. Optional: Register with global apps (Claude Desktop, Google Antigravity, Gemini)
 npx pigeongraph install-mcp --mode npx
+```
 
-# Option B: Add to a single project as a dev dependency
-npm install --save-dev pigeongraph
-npx pigeongraph index
+### Workflow B: Global installation (Recommended for daily development)
 
-# Option C: Global install from npm registry
+Install the CLI globally to run `pigeongraph` across all repositories:
+
+```bash
+# 1. Install globally from npm
 npm install -g pigeongraph
 
-# Option D: Build and link from source
+# 2. Initialize project configuration in your repository root
+pigeongraph init
+
+# 3. Index your codebase
+pigeongraph index
+
+# 4. Query symbols or inspect call chains
+pigeongraph explore "verifyToken"
+
+# 5. Launch the live architecture visualizer (http://127.0.0.1:5052)
+pigeongraph ui
+
+# 6. Register MCP configuration with your installed coding agents
+pigeongraph install-mcp
+```
+
+### Workflow C: Install from source
+
+```bash
 git clone https://github.com/Hoppy-Beast/pigeongraph.git
-cd pigeongraph && npm run setup
+cd pigeongraph
+npm run setup
 ```
 Running `npm run setup` installs dependencies, compiles all packages, and links the `pigeongraph` executable globally.
 
 Requires [Node.js >= 22.5.0](https://nodejs.org) (Node 24 LTS recommended for native `node:sqlite`).
 
-### 2. Register with your coding agents
+---
 
-PigeonGraph configures Claude Desktop, Claude Code, Cursor, Google Antigravity, and Gemini CLI automatically:
+### Key operational details
 
+#### Where files are stored
+PigeonGraph stores project configuration and its SQLite database inside `.pigeongraph/` in your repository root:
+- `.pigeongraph/config.json`: Project configuration. Default exclusions (`node_modules`, `.git`, `dist`, `build`, `.venv`, `venv`, `__pycache__`, `.next`, `.nuxt`, `.turbo`, `.cache`) prevent CPU thrashing during builds, while documentation directories (`docs`) remain fully indexed.
+- `.pigeongraph/substrate.db`: Persistent SQLite database with WAL and FTS5 search storing AST nodes and relationship edges.
+
+Because `.pigeongraph` begins with a dot, operating systems and environments such as Google Colab hide it by default in file trees. Run `ls -la .pigeongraph` (or `dir /a .pigeongraph` on Windows) to view the files.
+
+#### Port auto-fallback
+When running `pigeongraph ui`, the visualizer starts an HTTP server (default port 5052) and a WebSocket live diff streamer (default port 5051).
+If either port is already occupied by another process or an active MCP server, PigeonGraph automatically binds to the next available ports without crashing. You can also specify custom ports explicitly:
 ```bash
-# Global binary registration
-pigeongraph install-mcp
-
-# Or local project registration using npx (no global install required)
-npx pigeongraph install-mcp --mode npx
-```
-To remove the MCP registration later: `pigeongraph uninstall-mcp`
-
-### 3. Initialize and index your project
-
-Generate `.pigeongraph/config.json`, `.cursor/mcp.json`, and `.mcp.json` in your workspace:
-```bash
-pigeongraph init
+# Custom HTTP and WebSocket ports
+pigeongraph ui --port 5060 --ws-port 5061
 ```
 
-**Where files are stored:**
-PigeonGraph stores its configuration and compiled knowledge graph inside the `.pigeongraph/` folder in your project root:
-- `.pigeongraph/config.json`: Project configuration. By default, standard build and dependency directories (`node_modules`, `.git`, `dist`, `build`, `.venv`, `__pycache__`) are safely excluded, while all documentation (`docs`) remains fully indexed.
-- `.pigeongraph/substrate.db`: Persistent SQLite database storing AST nodes, symbols, and relationship edges.
-
-*Note on hidden folders:* Because `.pigeongraph` starts with a dot, operating systems (Linux, macOS) and environments like Google Colab treat it as a hidden directory. In your terminal, run `ls -la .pigeongraph` (or `dir /a .pigeongraph` on Windows) to view the files.
-
-#### Windows & GUI IDE Setup (Cursor, Claude Desktop)
-On Windows, GUI applications (Cursor, Claude Desktop) do not spawn processes inside a shell by default.
-- When you run `pigeongraph init` or `pigeongraph install-mcp`, PigeonGraph automatically configures executable paths (`node.exe` with CLI path, or `pigeongraph.cmd`) to avoid `ENOENT` spawn errors.
+#### Windows and GUI IDE setup (Cursor, Claude Desktop)
+On Windows, GUI applications like Cursor and Claude Desktop spawn processes directly without a shell.
+- Running `pigeongraph init` or `pigeongraph install-mcp` automatically detects Windows and configures absolute executable paths (`node.exe` with CLI path, or `pigeongraph.cmd`) to prevent `ENOENT` spawn errors.
 - If configuring manually in `.cursor/mcp.json` or `claude_desktop_config.json` on Windows, use `pigeongraph.cmd` instead of bare `pigeongraph`, or invoke `node` with the absolute path to `cli.js`:
   ```json
   "command": "pigeongraph.cmd",
   "args": ["serve-mcp"]
   ```
 
-Build and persist the local code knowledge graph in `.pigeongraph/substrate.db`:
+### Basic commands
+
 ```bash
-# Build the index (incremental, skips unchanged files)
+# Incremental index (skips unchanged files)
 pigeongraph index
 
-# Force a full rebuild
+# Full rebuild
 pigeongraph index --force
-```
 
-### 4. Basic commands
-
-```bash
-# Build or update the code knowledge graph
-pigeongraph index
-
-# Query the architecture in a single turn (sub-50ms repeat latency)
+# Single-turn architecture query (sub-50ms repeat latency)
 pigeongraph explore "verifyToken"
 
-# Start the web visualizer (http://127.0.0.1:5052)
+# Start the web visualizer (with automatic port conflict fallback)
 pigeongraph ui
 
-# Check pull request blast radius against a base branch
+# Pull request blast radius audit against a base branch
 pigeongraph audit-pr --base origin/main
 ```
 
@@ -352,10 +366,12 @@ PigeonGraph parses common programming languages out of the box and resolves runt
 
 To open the HTML5 Canvas graph viewer:
 ```bash
-pigeongraph ui [--port 5052]
+pigeongraph ui
 ```
 - Canvas runs at 60 fps with force-directed physics and no frontend framework dependencies.
-- Subscribes to changes over `ws://127.0.0.1:5051` and highlights updated nodes when files change on disk.
+- Subscribes to live graph mutations over WebSocket and highlights updated nodes when files change on disk.
+- If port 5051 or 5052 is in use, PigeonGraph automatically binds to the next available ports without crashing.
+- You can specify custom ports with `pigeongraph ui --port <num> --ws-port <num>`.
 - Click any node to open an inspection drawer with file paths, callers, callees, and code snippets.
 
 ### Pull request blast radius audit
@@ -465,7 +481,7 @@ For vulnerability reporting procedures and release support, see the [Security Po
 | `pigeongraph install-mcp` | Registers MCP server in Claude Desktop and Cursor configurations |
 | `pigeongraph uninstall-mcp` | Removes MCP server from Claude Desktop and Cursor configurations |
 | `pigeongraph explore <query>` | Runs a single-turn query and prints JSON results to stdout |
-| `pigeongraph ui [--port 5052]` | Starts the local web visualizer with live WebSocket updates |
+| `pigeongraph ui [--port <num>] [--ws-port <num>]` | Starts the local web visualizer with live WebSocket updates and automatic port fallback |
 | `pigeongraph audit-pr [--base <ref>]` | Compares modified symbols against a base commit using `H_semantic_inv` to estimate blast radius |
 | `pigeongraph serve-mcp` | Starts the stdio JSON-RPC 2.0 MCP server |
 
@@ -591,7 +607,7 @@ PigeonGraph stores project configuration and its SQLite database inside `.pigeon
 <details>
 <summary><b>What directories are excluded by default?</b></summary>
 
-By default, the `excludedDirs` array in `.pigeongraph/config.json` is empty (`[]`), leaving directory exclusion entirely up to you. Dot-prefixed directories (such as `.git` and `.pigeongraph`) are always ignored automatically. All other directories, source files, documentation, and tests are indexed unless you explicitly add them to `excludedDirs`.
+By default, standard build and dependency directories (`node_modules`, `.git`, `dist`, `build`, `.venv`, `venv`, `__pycache__`, `.next`, `.nuxt`, `.turbo`, `.cache`) are excluded in `.pigeongraph/config.json` to keep indexing responsive and avoid CPU thrashing. All source files, documentation (`docs`), architectural decisions (ADRs), and tests remain indexed unless you add them to `excludedDirs`.
 
 </details>
 

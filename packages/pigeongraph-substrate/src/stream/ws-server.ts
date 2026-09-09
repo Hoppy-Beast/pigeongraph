@@ -24,30 +24,69 @@ export class WebSocketStreamer {
     this.clockManager = options.clockManager;
   }
 
-  public start(): Promise<void> {
-    return new Promise((resolve) => {
-      this.wss = new WebSocketServer({ port: this.port }, () => {
-        resolve();
-      });
+  public getPort(): number {
+    return this.port;
+  }
 
-      this.wss.on('connection', (ws: WebSocket) => {
-        this.clients.add(ws);
+  public start(maxRetries = 10): Promise<number> {
+    return new Promise((resolve, reject) => {
+      let currentPort = this.port;
+      let attempts = 0;
 
-        ws.on('message', (message: string) => {
+      const tryListen = (portToTry: number) => {
+        const wss = new WebSocketServer({ port: portToTry });
+
+        const onError = (err: any) => {
+          wss.removeAllListeners();
           try {
-            const data = JSON.parse(message.toString());
-            if (data.type === 'RESYNC' && typeof data.last_seen_epoch === 'number') {
-              this.handleResync(ws, data.last_seen_epoch);
-            }
-          } catch {
-            // Ignore malformed client message
-          }
-        });
+            wss.close();
+          } catch {}
 
-        ws.on('close', () => {
-          this.clients.delete(ws);
+          if (err.code === 'EADDRINUSE' && portToTry !== 0 && attempts < maxRetries) {
+            attempts += 1;
+            currentPort = portToTry + 1;
+            tryListen(currentPort);
+          } else {
+            reject(err);
+          }
+        };
+
+        wss.once('error', onError);
+
+        wss.once('listening', () => {
+          wss.removeListener('error', onError);
+          wss.on('error', (err) => {
+            console.error(`[WebSocketStreamer] Runtime error on port ${portToTry}:`, err.message);
+          });
+
+          this.wss = wss;
+          const addr = wss.address();
+          this.port = typeof addr === 'object' && addr ? addr.port : portToTry;
+
+          this.wss.on('connection', (ws: WebSocket) => {
+            this.clients.add(ws);
+
+            ws.on('message', (message: string) => {
+              try {
+                const data = JSON.parse(message.toString());
+                if (data.type === 'RESYNC' && typeof data.last_seen_epoch === 'number') {
+                  this.handleResync(ws, data.last_seen_epoch);
+                }
+              } catch {
+                // Ignore malformed client message
+              }
+            });
+
+            ws.on('close', () => {
+              this.clients.delete(ws);
+            });
+          });
+
+          resolve(this.port);
         });
-      });
+      };
+
+      tryListen(currentPort);
     });
   }
 

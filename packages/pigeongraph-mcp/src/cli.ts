@@ -161,16 +161,40 @@ async function main() {
     console.log(JSON.stringify(result, null, 2));
     await daemon.stop();
   } else if (command === 'ui') {
-    const portIdx = args.indexOf('--port');
-    const uiPort = portIdx !== -1 ? parseInt(args[portIdx + 1], 10) : 5052;
+    // Strip accidental brackets in case user copied literally from CLI help: e.g. [--port 5052]
+    const cleanArgs = args.map((a) => a.replace(/^\[+|\]+$/g, ''));
+
+    let uiPort = 5052;
+    const portFlagIdx = cleanArgs.findIndex((a) => a === '--port' || a.startsWith('--port='));
+    if (portFlagIdx !== -1) {
+      const val = cleanArgs[portFlagIdx].includes('=')
+        ? cleanArgs[portFlagIdx].split('=')[1]
+        : cleanArgs[portFlagIdx + 1];
+      const parsed = parseInt(val, 10);
+      if (!isNaN(parsed)) uiPort = parsed;
+    }
+
+    let customWsPort: number | undefined = undefined;
+    const wsPortFlagIdx = cleanArgs.findIndex((a) => a === '--ws-port' || a.startsWith('--ws-port='));
+    if (wsPortFlagIdx !== -1) {
+      const val = cleanArgs[wsPortFlagIdx].includes('=')
+        ? cleanArgs[wsPortFlagIdx].split('=')[1]
+        : cleanArgs[wsPortFlagIdx + 1];
+      const parsed = parseInt(val, 10);
+      if (!isNaN(parsed)) customWsPort = parsed;
+    }
+
+    if (customWsPort) {
+      daemonOptions.wsPort = customWsPort;
+    }
 
     const daemon = new SubstrateDaemon(daemonOptions);
-    await daemon.start();
+    const boundWsPort = await daemon.start();
     await daemon.watcher.flushPendingBatch();
 
     const uiServer = new UiServer({
       db: daemon.db,
-      wsPort: daemonOptions.wsPort ?? 5051,
+      wsPort: boundWsPort,
     });
 
     const boundPort = await uiServer.start(uiPort);
@@ -179,7 +203,7 @@ async function main() {
     console.log(`
 🐦 PigeonGraph Live Architecture Canvas active!
 🌐 Visualizer URL : ${uiUrl}
-⚡ WebSocket Diff : ws://127.0.0.1:${daemonOptions.wsPort ?? 5051}
+⚡ WebSocket Diff : ws://127.0.0.1:${boundWsPort}
 📂 Monitored Root : ${projectRoot}
 
 Press Ctrl+C to stop.
@@ -265,9 +289,19 @@ Press Ctrl+C to stop.
 🎯 Cursor Config: ${res.cursorMcpPath}
 
 Next steps:
-- Run 'pigeongraph install-mcp' to register with Claude Desktop & Cursor
-- Run 'pigeongraph explore <query>' to query code knowledge
-- Run 'pigeongraph ui' to open the live architecture canvas
+  1. Index your codebase:
+     pigeongraph index         (or: npx pigeongraph index)
+
+  2. Explore code in 1 shot:
+     pigeongraph explore <q>   (or: npx pigeongraph explore <q>)
+
+  3. Launch architecture visualizer:
+     pigeongraph ui            (or: npx pigeongraph ui)
+
+  4. Coding agent integration:
+     - Cursor is already configured (.cursor/mcp.json)
+     - To register global apps (Claude Desktop, Antigravity, Gemini):
+       pigeongraph install-mcp (or: npx pigeongraph install-mcp --mode npx)
     `);
   } else if (command === 'install-mcp' || command === 'install') {
     const targetIdx = args.indexOf('--target');
@@ -306,7 +340,7 @@ PigeonGraph MCP has been uninstalled.
     console.log(`
 \x1b[38;5;215m${DOT_LOGO}\x1b[0m
 
-🐦 PigeonGraph CLI v1.0.4
+🐦 PigeonGraph CLI v1.0.5
 Author: MD. Mahinur Rahman Prachurza (Hoppy-Beast)
 
 Commands:
@@ -315,7 +349,7 @@ Commands:
   pigeongraph explore <q>       Query knowledge graph in 1 shot from terminal
   pigeongraph install-mcp       Auto-register MCP with Claude Desktop & Cursor
   pigeongraph uninstall-mcp     Remove MCP from Claude Desktop & Cursor
-  pigeongraph ui [--port 5052]  Launch live in-browser architecture visualizer
+  pigeongraph ui [--port <num>] Launch live in-browser architecture visualizer
   pigeongraph audit-pr          Calculate PR blast radius and interface breaking risk
   pigeongraph serve-mcp         Start stdio Model Context Protocol (MCP) server
     `);

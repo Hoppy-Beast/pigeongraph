@@ -60,7 +60,7 @@ Node.js >= 22.5.0 is required for native SQLite (`node:sqlite` `DatabaseSync`). 
 # 1. Build all packages (TypeScript project references)
 npm run build
 
-# 2. Run the complete test suite (32 tests across 8 suites)
+# 2. Run the complete test suite (46 tests across 10 suites)
 npm test
 
 # 3. Run benchmarks across test repositories

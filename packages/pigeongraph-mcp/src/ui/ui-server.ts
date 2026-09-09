@@ -10,12 +10,13 @@ export interface UiServerOptions {
 }
 
 export class UiServer {
-  private server: Server;
+  private server: Server | null = null;
   private options: UiServerOptions;
+  private requestHandler: (req: any, res: any) => void;
 
   constructor(options: UiServerOptions) {
     this.options = options;
-    this.server = createServer((req, res) => {
+    this.requestHandler = (req, res) => {
       const url = new URL(req.url ?? '/', `http://${req.headers.host || 'localhost'}`);
 
       if (url.pathname === '/' || url.pathname === '/index.html') {
@@ -74,22 +75,62 @@ export class UiServer {
 
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('Not Found');
-    });
+    };
   }
 
-  public async start(port = 5052): Promise<number> {
+  public setWsPort(wsPort: number): void {
+    this.options.wsPort = wsPort;
+  }
+
+  public async start(preferredPort = 5052, maxRetries = 10): Promise<number> {
     return new Promise((resolve, reject) => {
-      this.server.listen(port, () => {
-        const addr = this.server.address();
-        const boundPort = typeof addr === 'object' && addr ? addr.port : port;
-        resolve(boundPort);
-      });
-      this.server.on('error', reject);
+      let currentPort = preferredPort;
+      let attempts = 0;
+
+      const tryListen = (portToTry: number) => {
+        const srv = createServer(this.requestHandler);
+
+        const onError = (err: any) => {
+          srv.removeAllListeners();
+          try {
+            srv.close();
+          } catch {}
+
+          if (err.code === 'EADDRINUSE' && portToTry !== 0 && attempts < maxRetries) {
+            attempts += 1;
+            currentPort = portToTry + 1;
+            tryListen(currentPort);
+          } else {
+            reject(err);
+          }
+        };
+
+        srv.once('error', onError);
+
+        srv.once('listening', () => {
+          srv.removeListener('error', onError);
+          srv.on('error', (err) => {
+            console.error(`[UiServer] Runtime error on port ${portToTry}:`, err.message);
+          });
+          this.server = srv;
+          const addr = srv.address();
+          const boundPort = typeof addr === 'object' && addr ? addr.port : portToTry;
+          resolve(boundPort);
+        });
+
+        srv.listen(portToTry);
+      };
+
+      tryListen(currentPort);
     });
   }
 
   public async close(): Promise<void> {
     return new Promise((resolve) => {
+      if (!this.server) {
+        resolve();
+        return;
+      }
       this.server.close(() => resolve());
     });
   }
