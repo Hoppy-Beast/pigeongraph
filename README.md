@@ -461,12 +461,14 @@ For vulnerability reporting procedures and release support, see the [Security Po
 | Command | Description |
 | :--- | :--- |
 | `pigeongraph init` | Generates `.pigeongraph/config.json` and agent `.cursor/mcp.json` files |
+| `pigeongraph index` | Build the index (incremental, skips unchanged files) |
 | `pigeongraph install-mcp` | Registers MCP server in Claude Desktop and Cursor configurations |
 | `pigeongraph uninstall-mcp` | Removes MCP server from Claude Desktop and Cursor configurations |
 | `pigeongraph explore <query>` | Runs a single-turn query and prints JSON results to stdout |
 | `pigeongraph ui [--port 5052]` | Starts the local web visualizer with live WebSocket updates |
 | `pigeongraph audit-pr [--base <ref>]` | Compares modified symbols against a base commit using `H_semantic_inv` to estimate blast radius |
 | `pigeongraph serve-mcp` | Starts the stdio JSON-RPC 2.0 MCP server |
+
 
 </details>
 
@@ -657,3 +659,5 @@ Copyright (c) 2026 MD. Mahinur Rahman Prachurza (Hoppy-Beast)
 ```
 
 </details>
+
+
