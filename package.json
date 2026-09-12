@@ -1,6 +1,6 @@
 {
   "name": "pigeongraph",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Unified multi-layer code knowledge graph for AI coding agents combining real-time OS file monitoring, dynamic dispatch synthesis, and async multimodal document intelligence.",
   "author": "MD. Mahinur Rahman Prachurza (Hoppy-Beast)",
   "license": "MIT",

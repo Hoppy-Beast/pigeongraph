@@ -340,7 +340,7 @@ PigeonGraph MCP has been uninstalled.
     console.log(`
 \x1b[38;5;215m${DOT_LOGO}\x1b[0m
 
-🐦 PigeonGraph CLI v1.0.5
+🐦 PigeonGraph CLI v1.0.6
 Author: MD. Mahinur Rahman Prachurza (Hoppy-Beast)
 
 Commands:

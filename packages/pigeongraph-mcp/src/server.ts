@@ -166,7 +166,7 @@ export class SuperGraphMcpServer {
           id,
           result: {
             protocolVersion: '2024-11-05',
-            serverInfo: { name: 'pigeongraph-mcp', version: '1.0.5' },
+            serverInfo: { name: 'pigeongraph-mcp', version: '1.0.6' },
             capabilities: { tools: {} },
           },
         });
