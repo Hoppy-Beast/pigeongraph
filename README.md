@@ -476,9 +476,10 @@ For vulnerability reporting procedures and release support, see the [Security Po
 
 | Command | Description |
 | :--- | :--- |
-| `pigeongraph init` | Generates `.pigeongraph/config.json` and agent `.cursor/mcp.json` files |
+| `pigeongraph init` | Generates `.pigeongraph/config.json`, MCP configs, and injects AI agent steering rules (`AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`, etc.) |
+| `pigeongraph steer` | Injects/updates AI agent steering rules instructing LLMs to prioritize PigeonGraph over grep |
 | `pigeongraph index` | Build the index (incremental, skips unchanged files) |
-| `pigeongraph install-mcp` | Registers MCP server in Claude Desktop and Cursor configurations |
+| `pigeongraph install-mcp` | Registers MCP server across Claude Desktop, Cursor, Antigravity, and Gemini, and injects agent steering rules |
 | `pigeongraph uninstall-mcp` | Removes MCP server from Claude Desktop and Cursor configurations |
 | `pigeongraph explore <query>` | Runs a single-turn query and prints JSON results to stdout |
 | `pigeongraph ui [--port <num>] [--ws-port <num>]` | Starts the local web visualizer with live WebSocket updates and automatic port fallback |

@@ -117,15 +117,57 @@ export class DynamicDispatchSynthesizer {
     fileContents: Map<string, string>,
     results: Array<{ sourceId: string; targetId: string; edge: SubstrateEdge }>
   ): void {
-    const routeRegex = /(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]\s*,\s*(?:[a-zA-Z0-9_$.]+\s*,\s*)*([a-zA-Z0-9_$]+)/gi;
+    const routeRegex = /(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]\s*,\s*([^);]+)\)/gi;
+    const pyRouteRegex = /@(?:app|router|api_router)\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"][^)]*\)(?:[ \t]*(?:\r?\n)(?:[ \t]*@[^\r\n]+)*)?[ \t]*(?:\r?\n)[ \t]*(?:async\s+)?def\s+([a-zA-Z0-9_$]+)/gi;
+    const pyMiddlewareRegex = /(?:app|router)\.add_middleware\s*\(\s*([a-zA-Z0-9_$]+)/gi;
+    const jsMiddlewareRegex = /(?:app|router)\.use\s*\(\s*(?:['"]([^'"]+)['"]\s*,\s*)?([a-zA-Z0-9_$]+)\s*\)/gi;
 
     for (const [filePath, content] of fileContents.entries()) {
-      if (!content.includes('app.') && !content.includes('router.')) continue;
+      if (
+        !content.includes('app.') &&
+        !content.includes('router.') &&
+        !content.includes('@app.') &&
+        !content.includes('@router.') &&
+        !content.includes('api_router.') &&
+        !content.includes('add_middleware')
+      ) {
+        continue;
+      }
       const fileNodes = nodesByFile.get(filePath);
       if (!fileNodes || fileNodes.length === 0) continue;
 
+      // 1. Standard JS/TS routes (app.get('/path', [middleware], handler))
       let match: RegExpExecArray | null;
       while ((match = routeRegex.exec(content)) !== null) {
+        const method = match[1].toUpperCase();
+        const path = match[2];
+        const rawHandlers = match[3].split(',').map((h) => h.trim().replace(/^.*[^\w$]([\w$]+)$/, '$1'));
+
+        for (const handlerName of rawHandlers) {
+          const matchingNodes = nodesByName.get(handlerName);
+          const targetNode = matchingNodes?.[0];
+          if (targetNode) {
+            const edge: SubstrateEdge = {
+              targetId: targetNode.id,
+              kind: 'HANDLES_ROUTE',
+              confidence: 'EXTRACTED',
+              confidenceScore: 0.95,
+              provenance: 'native-rust-synthesizer',
+              dispatchMechanism: `HTTP ${method} ${path}`,
+            };
+
+            fileNodes[0].substrate.outgoingEdges.push(edge);
+            results.push({ sourceId: fileNodes[0].id, targetId: targetNode.id, edge });
+
+            targetNode.processFlow.isEntryPoint = true;
+            targetNode.processFlow.entryPointScore = 0.95;
+            targetNode.processFlow.entryPointType = 'HTTP_ROUTE';
+          }
+        }
+      }
+
+      // 2. Python FastAPI / Flask route decorators (@app.get('/path') def handler():)
+      while ((match = pyRouteRegex.exec(content)) !== null) {
         const method = match[1].toUpperCase();
         const path = match[2];
         const handlerName = match[3];
@@ -140,6 +182,55 @@ export class DynamicDispatchSynthesizer {
             confidenceScore: 0.95,
             provenance: 'native-rust-synthesizer',
             dispatchMechanism: `HTTP ${method} ${path}`,
+          };
+
+          fileNodes[0].substrate.outgoingEdges.push(edge);
+          results.push({ sourceId: fileNodes[0].id, targetId: targetNode.id, edge });
+
+          targetNode.processFlow.isEntryPoint = true;
+          targetNode.processFlow.entryPointScore = 0.95;
+          targetNode.processFlow.entryPointType = 'HTTP_ROUTE';
+        }
+      }
+
+      // 3. Python FastAPI middleware (app.add_middleware(CORSMiddleware))
+      while ((match = pyMiddlewareRegex.exec(content)) !== null) {
+        const mwName = match[1];
+        const matchingNodes = nodesByName.get(mwName);
+        const targetNode = matchingNodes?.[0];
+        if (targetNode) {
+          const edge: SubstrateEdge = {
+            targetId: targetNode.id,
+            kind: 'HANDLES_ROUTE',
+            confidence: 'EXTRACTED',
+            confidenceScore: 0.95,
+            provenance: 'native-rust-synthesizer',
+            dispatchMechanism: `MIDDLEWARE ${mwName}`,
+          };
+
+          fileNodes[0].substrate.outgoingEdges.push(edge);
+          results.push({ sourceId: fileNodes[0].id, targetId: targetNode.id, edge });
+
+          targetNode.processFlow.isEntryPoint = true;
+          targetNode.processFlow.entryPointScore = 0.95;
+          targetNode.processFlow.entryPointType = 'HTTP_ROUTE';
+        }
+      }
+
+      // 4. JS/TS middleware (app.use(CORSMiddleware) or app.use('/exam', ProtectedRoute))
+      while ((match = jsMiddlewareRegex.exec(content)) !== null) {
+        const usePath = match[1];
+        const mwName = match[2];
+        const matchingNodes = nodesByName.get(mwName);
+        const targetNode = matchingNodes?.[0];
+        if (targetNode) {
+          const edge: SubstrateEdge = {
+            targetId: targetNode.id,
+            kind: 'HANDLES_ROUTE',
+            confidence: 'EXTRACTED',
+            confidenceScore: 0.95,
+            provenance: 'native-rust-synthesizer',
+            dispatchMechanism: usePath ? `HTTP USE ${usePath}` : `MIDDLEWARE ${mwName}`,
           };
 
           fileNodes[0].substrate.outgoingEdges.push(edge);

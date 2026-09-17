@@ -39,13 +39,17 @@ export class SuperGraphMcpServer {
     return [
       {
         name: 'pigeongraph_explore',
-        description: `Primary 1-shot architectural navigation tool. Explores code symbols, execution flows, dynamic dispatches, blast radius, and served spans in a single turn. Replaces multi-turn file crawling and grepping.`,
+        description: `CRITICAL: Primary codebase navigation and symbol discovery tool. ALWAYS call this FIRST before attempting to grep or crawl files.
+Use this to find where any function, class, interface, method, route (e.g. '/exam', '/auth'), middleware (e.g. 'ProtectedRoute', 'CORSMiddleware'), or component is defined and used.
+Returns exact file paths, line numbers, signatures, call chains, dynamic dispatches (EventEmitters, routes), and blast radius in a single turn.
+PREFER this over grep/ripgrep for any code symbol, route, or architecture search. Use grep ONLY for raw string literals, comments, or non-code text.`,
         inputSchema: {
           type: 'object',
           properties: {
             query: {
               type: 'string',
-              description: 'Natural language question, keyword, or symbol name (e.g., "verifyToken", "how does login work?").',
+              description:
+                'Symbol name, route path, middleware, class, function, or natural language query (e.g., "ProtectedRoute", "/exam", "CORSMiddleware", "verifyToken", "how does login work?").',
             },
             task_context: {
               type: 'string',
@@ -71,7 +75,7 @@ export class SuperGraphMcpServer {
       },
       {
         name: 'pigeongraph_impact',
-        description: `Calculates detailed multi-axis blast radius for refactoring and risk assessment.`,
+        description: `Calculates blast radius and dependency risk for a symbol before modifying or refactoring it. Returns all upstream callers and downstream dependencies. Call this before editing or refactoring shared functions/classes.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -94,7 +98,7 @@ export class SuperGraphMcpServer {
       },
       {
         name: 'pigeongraph_trace',
-        description: `Traces the shortest directed execution path between two symbols across modules or repos.`,
+        description: `Traces the direct execution path and call chain between two symbols across modules or files (e.g. from an API route or entry point to a database query).`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -166,7 +170,13 @@ export class SuperGraphMcpServer {
           id,
           result: {
             protocolVersion: '2024-11-05',
-            serverInfo: { name: 'pigeongraph-mcp', version: '1.0.6' },
+            serverInfo: { name: 'pigeongraph-mcp', version: '1.0.7' },
+            instructions: `You are equipped with PigeonGraph, a zero-latency code knowledge graph.
+Always query PigeonGraph (pigeongraph_explore) first when:
+- Finding where functions, classes, interfaces, routes (e.g. /exam), middleware (e.g. ProtectedRoute, CORSMiddleware), or components are defined.
+- Understanding control flow, call chains, or dynamic dispatches.
+- Assessing blast radius and refactoring risk.
+Do NOT default to multi-turn grep or file searches for code symbols. PigeonGraph returns exact file paths, line numbers, call chains, and context in a single turn. Only use grep for raw string literals, regexes across text files, or comments.`,
             capabilities: { tools: {} },
           },
         });

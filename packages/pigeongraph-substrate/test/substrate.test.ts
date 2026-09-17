@@ -415,6 +415,47 @@ Agents will spend fewer tokens on exploratory grepping.
     assert.equal(routeEdge.edge.dispatchMechanism, 'HTTP GET /api/orders');
   });
 
+  test('DynamicDispatchSynthesizer parses Python route decorators, middleware, and route guards', () => {
+    const fileContents = new Map<string, string>();
+
+    const pyAppCode = `
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+app.add_middleware(CORSMiddleware)
+
+@app.get("/exam")
+def get_exam():
+    return {"status": "ok"}
+    `;
+
+    const tsAppCode = `
+      app.get('/exam', ProtectedRoute, examController);
+      export function ProtectedRoute(req, res, next) { next(); }
+      export function examController(req, res) { res.json({}); }
+    `;
+
+    fileContents.set('api/main.py', pyAppCode);
+    fileContents.set('src/exam.ts', tsAppCode);
+
+    const pyNodes = extractor.parseFile({ repoId: 'app', filePath: 'api/main.py', content: pyAppCode, epoch: 1, lamportClock: 1 }).nodes;
+    const tsNodes = extractor.parseFile({ repoId: 'app', filePath: 'src/exam.ts', content: tsAppCode, epoch: 1, lamportClock: 1 }).nodes;
+
+    const allNodes = [...pyNodes, ...tsNodes];
+    const { synthesizedEdges } = synthesizer.synthesize(allNodes, fileContents);
+
+    // Verify Python FastAPI route
+    const pyRouteEdge = synthesizedEdges.find((e) => e.edge.dispatchMechanism === 'HTTP GET /exam');
+    assert.ok(pyRouteEdge, 'Should synthesize Python @app.get(/exam) route');
+
+    // Verify ProtectedRoute middleware is recognized in TS route definition
+    const protectedRouteNode = tsNodes.find((n) => n.name === 'ProtectedRoute');
+    assert.ok(protectedRouteNode, 'ProtectedRoute must be parsed');
+    const protectedRouteEdge = synthesizedEdges.find((e) => e.targetId === protectedRouteNode?.id);
+    assert.ok(protectedRouteEdge, 'ProtectedRoute should be linked via HANDLES_ROUTE');
+  });
+
   test('DynamicDispatchSynthesizer links cross-repo microservice HTTP contracts', () => {
     const fileContents = new Map<string, string>();
 

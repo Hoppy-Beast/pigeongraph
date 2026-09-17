@@ -57,6 +57,8 @@ describe('PigeonGraph MCP Server Protocol Tests', () => {
     const parsed = JSON.parse(resp);
     assert.equal(parsed.id, 1);
     assert.equal(parsed.result.serverInfo.name, 'pigeongraph-mcp');
+    assert.ok(parsed.result.instructions);
+    assert.ok(parsed.result.instructions.includes('pigeongraph_explore'));
     assert.ok(parsed.result.capabilities.tools);
   });
 

@@ -34,7 +34,8 @@ GEMINI.md
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
-.cursor/
+.cursor/*
+!.cursor/rules/
 .mcp.json
 .idea/
 *.swp

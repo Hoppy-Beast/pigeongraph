@@ -1,0 +1,12 @@
+---
+description: PigeonGraph architectural exploration and symbol discovery rules
+globs: *
+alwaysApply: true
+---
+
+# ?? PigeonGraph Exploration Protocol
+
+When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** before using `grep`, `grep_search`, `find`, or reading multiple whole files.
+- Use `pigeongraph_explore` (MCP) or `pigeongraph explore "<query>"` (CLI) for symbol definitions, routes (e.g. `/exam`), middleware (`ProtectedRoute`, `CORSMiddleware`), classes, functions, and call chains.
+- Use `pigeongraph_impact` to assess blast radius before refactoring.
+- Use `grep` ONLY for raw non-code string literals, comments, or regex across text files.

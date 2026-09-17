@@ -101,6 +101,14 @@ describe('Client Execution Layer & Query Surface Tests', () => {
           confidenceScore: 1.0,
           provenance: 'tree-sitter-ast',
         },
+        {
+          targetId: 'sg://app/src/routes/api.ts#loginRoute',
+          kind: 'HANDLES_ROUTE',
+          confidence: 'EXTRACTED',
+          confidenceScore: 0.95,
+          provenance: 'native-synthesizer',
+          dispatchMechanism: 'HTTP POST /api/login',
+        },
       ],
       astEpochTimestamp: new Date().toISOString(),
     },
@@ -134,7 +142,7 @@ describe('Client Execution Layer & Query Surface Tests', () => {
     const res = reconciler.applySubstrateDelta(envelope);
     assert.equal(res.appliedMutations, 3);
     assert.equal(store.countNodes(), 3);
-    assert.equal(store.countEdges(), 2);
+    assert.equal(store.countEdges(), 3);
 
     // Apply delayed semantic patch
     const patchSuccess = reconciler.applySemanticPatch(
@@ -219,5 +227,17 @@ describe('Client Execution Layer & Query Surface Tests', () => {
     assert.equal(trace.path[0].name, 'loginRoute');
     assert.equal(trace.path[1].name, 'verifyToken');
     assert.equal(trace.path[2].name, 'getKey');
+  });
+
+  test('SuperGraphExploreEngine resolves route queries (/api/login, POST /api/login) directly to route handlers', () => {
+    const response = exploreEngine.explore({
+      query: '/api/login',
+    });
+
+    assert.equal(response.query_summary.resolved_anchor, nodeRoute.id);
+    assert.equal(response.query_summary.epistemic_status, 'EXACT');
+    assert.equal(response.symbols[0].name, 'loginRoute');
+    assert.ok(response.execution_flows.entry_points.length >= 1);
+    assert.equal(response.execution_flows.entry_points[0].route, 'HTTP POST /api/login');
   });
 });

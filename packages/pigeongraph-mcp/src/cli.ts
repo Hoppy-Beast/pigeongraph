@@ -287,6 +287,8 @@ Press Ctrl+C to stop.
 📂 Project Root : ${projectRoot}
 ⚙️  Config File  : ${res.configPath}
 🎯 Cursor Config: ${res.cursorMcpPath}
+🧠 Steering Rules:
+${(res.steeringFiles ?? []).map((f) => `  ✅ ${f}`).join('\n')}
 
 Next steps:
   1. Index your codebase:
@@ -300,8 +302,19 @@ Next steps:
 
   4. Coding agent integration:
      - Cursor is already configured (.cursor/mcp.json)
+     - Agent steering rules are active (AGENTS.md, CLAUDE.md, .cursor/rules, .gemini/rules)
      - To register global apps (Claude Desktop, Antigravity, Gemini):
        pigeongraph install-mcp (or: npx pigeongraph install-mcp --mode npx)
+    `);
+  } else if (command === 'steer') {
+    const written = AgentInstaller.installSteering(projectRoot);
+    console.log(`
+🐦 PigeonGraph Agent Steering Rules Injected!
+============================================
+The following AI coding agent rule files have been updated:
+${written.map((f) => `  ✅ ${f}`).join('\n')}
+
+All AI coding assistants (Claude Code, Cursor, Antigravity, Gemini CLI, Windsurf, Copilot) are now instructed to query PigeonGraph before using grep.
     `);
   } else if (command === 'install-mcp' || command === 'install') {
     const targetIdx = args.indexOf('--target');
@@ -320,7 +333,7 @@ ${res.targets
   .map((t) => (t.updated ? `  ✅ ${t.name}: ${t.path}` : `  ⚠️  ${t.name}: Skipped (${t.path})`))
   .join('\n')}
 
-🎉 PigeonGraph registered! Restart your AI agent / IDE to start exploring.
+🎉 PigeonGraph registered and agent steering rules injected! Restart your AI agent / IDE to start exploring.
     `);
   } else if (command === 'uninstall-mcp' || command === 'uninstall') {
     const targetIdx = args.indexOf('--target');
@@ -340,11 +353,12 @@ PigeonGraph MCP has been uninstalled.
     console.log(`
 \x1b[38;5;215m${DOT_LOGO}\x1b[0m
 
-🐦 PigeonGraph CLI v1.0.6
+🐦 PigeonGraph CLI v1.0.7
 Author: MD. Mahinur Rahman Prachurza (Hoppy-Beast)
 
 Commands:
   pigeongraph init              Initialize .pigeongraph config & agent MCP files
+  pigeongraph steer             Inject/update AI steering rules (Cursor, Claude, AGENTS)
   pigeongraph index [--force]   Build & persist code knowledge graph
   pigeongraph explore <q>       Query knowledge graph in 1 shot from terminal
   pigeongraph install-mcp       Auto-register MCP with Claude Desktop & Cursor

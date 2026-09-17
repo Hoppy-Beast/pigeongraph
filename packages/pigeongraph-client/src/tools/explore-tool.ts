@@ -107,10 +107,27 @@ export class SuperGraphExploreEngine {
     const entryPoints: ExploreQueryResponse['execution_flows']['entry_points'] = [];
     const callChains: ExploreQueryResponse['execution_flows']['call_chains'] = [];
 
+    const resolveRouteMechanism = (n: SuperNode): string | undefined => {
+      for (const e of n.substrate.outgoingEdges) {
+        if (e.kind === 'HANDLES_ROUTE' && e.dispatchMechanism) {
+          return e.dispatchMechanism;
+        }
+      }
+      const inNodes = this.store.getInNeighbors(n.id);
+      for (const inN of inNodes) {
+        const edge = inN.substrate.outgoingEdges.find((e) => e.targetId === n.id && e.kind === 'HANDLES_ROUTE');
+        if (edge?.dispatchMechanism) {
+          return edge.dispatchMechanism;
+        }
+      }
+      return undefined;
+    };
+
     if (anchor) {
       if (anchor.processFlow.isEntryPoint) {
         entryPoints.push({
           type: anchor.processFlow.entryPointType ?? 'ENTRY_POINT',
+          route: resolveRouteMechanism(anchor),
           handler: anchor.qualifiedName,
         });
       }
@@ -122,6 +139,7 @@ export class SuperGraphExploreEngine {
         if (inNode.processFlow.isEntryPoint) {
           entryPoints.push({
             type: inNode.processFlow.entryPointType ?? 'ENTRY_POINT',
+            route: resolveRouteMechanism(inNode),
             handler: inNode.qualifiedName,
           });
         }
@@ -221,6 +239,43 @@ export class SuperGraphExploreEngine {
   private rankNodesFuzzy(query: string, nodes: SuperNode[]): { ranked: SuperNode[]; epistemicStatus: 'EXACT' | 'PROVISIONAL_LOWER_BOUND' } {
     const queryTerm = query.toLowerCase().trim();
     if (!queryTerm) return { ranked: [], epistemicStatus: 'PROVISIONAL_LOWER_BOUND' };
+
+    // 0. Direct Route / Dispatch Mechanism match (e.g., "/exam", "GET /exam", "POST /api/orders")
+    const isRouteOrMethodQuery =
+      queryTerm.startsWith('/') ||
+      queryTerm.startsWith('get ') ||
+      queryTerm.startsWith('post ') ||
+      queryTerm.startsWith('put ') ||
+      queryTerm.startsWith('delete ') ||
+      queryTerm.startsWith('patch ');
+
+    const normalizedRoute = queryTerm.replace(/^(get|post|put|delete|patch)\s+/, '').trim();
+    const routeMatchedNodes: SuperNode[] = [];
+
+    for (const node of nodes) {
+      for (const edge of node.substrate.outgoingEdges) {
+        if (edge.kind === 'HANDLES_ROUTE' && edge.dispatchMechanism) {
+          const mech = edge.dispatchMechanism.toLowerCase();
+          if (
+            mech === queryTerm ||
+            mech.includes(queryTerm) ||
+            (normalizedRoute && normalizedRoute.length > 1 && mech.includes(normalizedRoute))
+          ) {
+            const targetNode = this.store.getNode(edge.targetId);
+            if (targetNode && !routeMatchedNodes.some((n) => n.id === targetNode.id)) {
+              routeMatchedNodes.push(targetNode);
+            }
+            if (!routeMatchedNodes.some((n) => n.id === node.id)) {
+              routeMatchedNodes.push(node);
+            }
+          }
+        }
+      }
+    }
+
+    if (routeMatchedNodes.length > 0 && (isRouteOrMethodQuery || queryTerm.includes('/'))) {
+      return { ranked: routeMatchedNodes, epistemicStatus: 'EXACT' };
+    }
 
     // 1. Direct exact match
     const exactMatches = nodes.filter(

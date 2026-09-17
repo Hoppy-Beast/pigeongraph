@@ -39,6 +39,7 @@ export interface InitResult {
   configPath: string;
   cursorMcpPath: string;
   claudeCodeMcpPath: string;
+  steeringFiles?: string[];
 }
 
 export class AgentInstaller {
@@ -225,6 +226,7 @@ export class AgentInstaller {
       json.mcpServers = json.mcpServers || {};
       json.mcpServers.pigeongraph = mcpEntry;
       const ok = AgentInstaller.safeWriteJson(path, json);
+      AgentInstaller.installAntigravityInstructions();
       targets.push({ name: 'Google Antigravity', updated: ok, path });
     }
 
@@ -237,6 +239,9 @@ export class AgentInstaller {
       const ok = AgentInstaller.safeWriteJson(path, json);
       targets.push({ name: 'Gemini CLI', updated: ok, path });
     }
+
+    // Ensure steering files are updated across the workspace
+    AgentInstaller.installSteering(projectRoot);
 
     const success = targets.some((t) => t.updated);
     return {
@@ -319,6 +324,7 @@ export class AgentInstaller {
           '.nuxt',
           '.turbo',
           '.cache',
+          'eval-sandbox',
         ] as string[],
       };
       AgentInstaller.safeWriteJson(configPath, defaultConfig);
@@ -344,10 +350,135 @@ export class AgentInstaller {
     };
     AgentInstaller.safeWriteJson(claudeCodeMcpPath, claudeJson);
 
+    const steeringFiles = AgentInstaller.installSteering(projectRoot);
+
     return {
       configPath,
       cursorMcpPath,
       claudeCodeMcpPath,
+      steeringFiles,
     };
+  }
+
+  public static readonly PIGEONGRAPH_STEERING_GUIDANCE = `<!-- pigeongraph-guidance -->
+## 🐦 Code Navigation & Architecture with PigeonGraph
+
+### Protocol: Prefer PigeonGraph over Grep / File Crawling
+When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** before using \`grep\`, \`grep_search\`, \`find\`, \`find_by_name\`, or reading multiple whole files.
+
+#### 1. When to use PigeonGraph (\`pigeongraph_explore\` / \`pigeongraph explore "<query>"\`):
+- **Symbol & Token Discovery**: Finding where functions, classes, interfaces, types, methods, models, routes (e.g. \`/exam\`, \`/api/orders\`), middleware (e.g. \`ProtectedRoute\`, \`CORSMiddleware\`), or components are declared and used.
+- **Architectural Flow**: Questions like "How does auth work?", "Where is payment handled?", "Trace execution from route to database".
+- **Call Chains & Dependencies**: Finding who calls a function, or what a function calls.
+- **Dynamic Dispatches**: Tracing \`EventEmitter\` events (\`.emit\` -> \`.on\`), HTTP routes to controller handlers, and React state triggers.
+- **Blast Radius & Impact**: Assessing refactoring risks before editing code (use \`pigeongraph_impact\`).
+
+#### 2. Why PigeonGraph Beats Grep:
+- **1-Turn Resolution vs. Multi-Turn Crawling**: In 1 shot, PigeonGraph returns exact file paths, line ranges, signatures, callers, callees, dynamic dispatches, and blast radius.
+- **Semantic Precision**: Grep returns hundreds of noisy lines (imports, comments, string literals). PigeonGraph resolves the actual symbol and its relationships.
+- **Zero Token Waste**: Eliminates blindly loading entire files into context just to find a function definition.
+
+#### 3. When to use Grep / Find instead:
+- Searching for raw non-code string literals (e.g., specific error messages, CSS classes, UI copy, regex patterns in .env/markdown).
+- Searching for regex patterns across non-code files.
+- PigeonGraph returned 0 results for a symbol.
+<!-- /pigeongraph-guidance -->`;
+
+  public static installAntigravityInstructions(): boolean {
+    try {
+      const home = homedir();
+      const instructionsDir = join(home, '.gemini', 'antigravity', 'mcp', 'pigeongraph');
+      mkdirSync(instructionsDir, { recursive: true });
+      const instructionsPath = join(instructionsDir, 'instructions.md');
+      writeFileSync(instructionsPath, AgentInstaller.PIGEONGRAPH_STEERING_GUIDANCE, 'utf-8');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  public static installSteering(projectRoot = process.cwd()): string[] {
+    const writtenFiles: string[] = [];
+
+    const updateOrCreateSteeringFile = (filePath: string, header: string, guidance: string): void => {
+      try {
+        mkdirSync(dirname(filePath), { recursive: true });
+        if (existsSync(filePath)) {
+          const existing = readFileSync(filePath, 'utf-8');
+          const regex = /<!-- pigeongraph-guidance -->[\s\S]*?<!-- \/pigeongraph-guidance -->/g;
+          if (regex.test(existing)) {
+            const updated = existing.replace(regex, guidance.trim());
+            writeFileSync(filePath, updated, 'utf-8');
+          } else {
+            writeFileSync(filePath, `${existing.trimEnd()}\n\n${guidance}\n`, 'utf-8');
+          }
+        } else {
+          writeFileSync(filePath, `${header}\n\n${guidance}\n`, 'utf-8');
+        }
+        writtenFiles.push(filePath);
+      } catch {
+        // ignore write error
+      }
+    };
+
+    // 1. AGENTS.md
+    updateOrCreateSteeringFile(
+      join(projectRoot, 'AGENTS.md'),
+      '# AGENTS.md: Developer and AI Assistant Guide',
+      AgentInstaller.PIGEONGRAPH_STEERING_GUIDANCE
+    );
+
+    // 2. CLAUDE.md
+    updateOrCreateSteeringFile(
+      join(projectRoot, 'CLAUDE.md'),
+      '# CLAUDE.md: Instructions for Claude Code & Desktop',
+      AgentInstaller.PIGEONGRAPH_STEERING_GUIDANCE
+    );
+
+    // 3. Cursor rules (.cursor/rules/pigeongraph.mdc)
+    const cursorRule = `---
+description: PigeonGraph architectural exploration and symbol discovery rules
+globs: *
+alwaysApply: true
+---
+
+# 🐦 PigeonGraph Exploration Protocol
+
+When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** before using \`grep\`, \`grep_search\`, \`find\`, or reading multiple whole files.
+- Use \`pigeongraph_explore\` (MCP) or \`pigeongraph explore "<query>"\` (CLI) for symbol definitions, routes (e.g. \`/exam\`), middleware (\`ProtectedRoute\`, \`CORSMiddleware\`), classes, functions, and call chains.
+- Use \`pigeongraph_impact\` to assess blast radius before refactoring.
+- Use \`grep\` ONLY for raw non-code string literals, comments, or regex across text files.
+`;
+    try {
+      const cursorRulePath = join(projectRoot, '.cursor', 'rules', 'pigeongraph.mdc');
+      mkdirSync(dirname(cursorRulePath), { recursive: true });
+      writeFileSync(cursorRulePath, cursorRule, 'utf-8');
+      writtenFiles.push(cursorRulePath);
+    } catch {
+      // ignore
+    }
+
+    // 4. Gemini CLI & Antigravity (.gemini/rules/pigeongraph.md)
+    updateOrCreateSteeringFile(
+      join(projectRoot, '.gemini', 'rules', 'pigeongraph.md'),
+      '# PigeonGraph Exploration Directive',
+      AgentInstaller.PIGEONGRAPH_STEERING_GUIDANCE
+    );
+
+    // 5. Windsurf (.windsurfrules)
+    updateOrCreateSteeringFile(
+      join(projectRoot, '.windsurfrules'),
+      '# Windsurf Rules',
+      AgentInstaller.PIGEONGRAPH_STEERING_GUIDANCE
+    );
+
+    // 6. GitHub Copilot (.github/copilot-instructions.md)
+    updateOrCreateSteeringFile(
+      join(projectRoot, '.github', 'copilot-instructions.md'),
+      '# GitHub Copilot Custom Instructions',
+      AgentInstaller.PIGEONGRAPH_STEERING_GUIDANCE
+    );
+
+    return writtenFiles;
   }
 }
