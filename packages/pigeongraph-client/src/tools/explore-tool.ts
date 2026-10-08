@@ -42,7 +42,7 @@ export interface ExploreQueryResponse {
     }>;
     call_chains: Array<{
       chain_id: string;
-      steps: Array<{ hop: number; symbol: string; action: string }>;
+      steps: Array<{ hop: number; symbol: string; action: string; edgeKind?: string; dispatchMechanism?: string }>;
     }>;
   };
   dynamic_dispatches: Array<{
@@ -161,7 +161,142 @@ export class SuperGraphExploreEngine {
         }
       }
 
-      if (outNeighbors.length > 0) {
+      const getEdgeInfo = (
+        sourceId: string,
+        targetId: string
+      ): { kind?: string; dispatchMechanism?: string } => {
+        const source = this.store.getNode(sourceId);
+        const edge = source?.substrate.outgoingEdges.find((e) => e.targetId === targetId);
+        if (!edge) return {};
+        return { kind: edge.kind, dispatchMechanism: edge.dispatchMechanism };
+      };
+
+      // Reverse BFS: anchor -> ... -> entry (via in-neighbors), depth 5, max 2 shortest paths.
+      const findUpstreamPaths = (anchorId: string, maxDepth = 5, maxPaths = 2): string[][] => {
+        const collected: string[][] = [];
+        const queue: string[][] = [[anchorId]];
+        let guard = 0;
+        while (queue.length > 0 && collected.length < maxPaths && guard < 200) {
+          guard++;
+          const path = queue.shift()!;
+          const current = path[path.length - 1];
+          const depth = path.length - 1;
+          const node = this.store.getNode(current);
+          if (depth > 0 && node?.processFlow.isEntryPoint) {
+            collected.push([...path].reverse());
+            continue;
+          }
+          if (depth >= maxDepth) continue;
+          const neighbors = this.store
+            .getInNeighbors(current)
+            .map((n) => n.id)
+            .sort();
+          for (const nb of neighbors) {
+            if (path.includes(nb)) continue;
+            queue.push([...path, nb]);
+          }
+        }
+        const anchorNode = this.store.getNode(anchorId);
+        if (collected.length === 0 && anchorNode?.processFlow.isEntryPoint) {
+          return [[anchorId]];
+        }
+        return collected;
+      };
+
+      // Forward BFS: anchor -> ... -> sink (via out-neighbors), depth 5, max 2 shortest sink paths.
+      const findDownstreamPaths = (anchorId: string, maxDepth = 5, maxPaths = 2): string[][] => {
+        const collected: string[][] = [];
+        const queue: string[][] = [[anchorId]];
+        let guard = 0;
+        while (queue.length > 0 && collected.length < maxPaths && guard < 200) {
+          guard++;
+          const path = queue.shift()!;
+          const current = path[path.length - 1];
+          const depth = path.length - 1;
+          if (depth >= maxDepth) {
+            collected.push(path);
+            continue;
+          }
+          const neighbors = this.store
+            .getOutNeighbors(current)
+            .map((n) => n.id)
+            .filter((id) => !path.includes(id))
+            .sort();
+          if (neighbors.length === 0) {
+            collected.push(path);
+            continue;
+          }
+          for (const nb of neighbors) {
+            queue.push([...path, nb]);
+          }
+        }
+        return collected;
+      };
+
+      const upstreamPaths = findUpstreamPaths(anchor.id, 5, 2);
+      const downstreamPaths = findDownstreamPaths(anchor.id, 5, 2);
+      const upList = upstreamPaths.length > 0 ? upstreamPaths : [[anchor.id]];
+      const downList = downstreamPaths.length > 0 ? downstreamPaths : [[anchor.id]];
+
+      const combos: string[][] = [];
+      for (const up of upList) {
+        for (const down of downList) {
+          combos.push([...up, ...down.slice(1)]);
+        }
+      }
+      combos.sort((a, b) => a.length - b.length || a.join('|').localeCompare(b.join('|')));
+      const seen = new Set<string>();
+      const uniqueCombos: string[][] = [];
+      for (const c of combos) {
+        const key = c.join('->');
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueCombos.push(c);
+        }
+        if (uniqueCombos.length >= 3) break;
+      }
+
+      uniqueCombos.slice(0, 3).forEach((ids, chainIdx) => {
+        const capped = ids.slice(0, 7);
+        const steps = capped.map((id, hop) => {
+          const node = this.store.getNode(id);
+          const symbol = node?.qualifiedName ?? id;
+          if (id === anchor.id) {
+            const edge = hop > 0 ? getEdgeInfo(capped[hop - 1], id) : {};
+            return {
+              hop,
+              symbol,
+              action: 'ORIGIN' as const,
+              ...(edge.kind ? { edgeKind: edge.kind } : {}),
+              ...(edge.dispatchMechanism ? { dispatchMechanism: edge.dispatchMechanism } : {}),
+            };
+          }
+          const prevId = hop > 0 ? capped[hop - 1] : undefined;
+          const edge = prevId ? getEdgeInfo(prevId, id) : {};
+          let action: string;
+          if (hop === 0 && node?.processFlow.isEntryPoint) {
+            action = 'ENTRY';
+          } else if (edge.kind) {
+            action = edge.kind;
+          } else {
+            action = 'CALLS';
+          }
+          return {
+            hop,
+            symbol,
+            action,
+            ...(edge.kind ? { edgeKind: edge.kind } : {}),
+            ...(edge.dispatchMechanism ? { dispatchMechanism: edge.dispatchMechanism } : {}),
+          };
+        });
+        callChains.push({
+          chain_id: `flow_${anchor.name}_${String(chainIdx + 1).padStart(2, '0')}`,
+          steps,
+        });
+      });
+
+      // Fallback: isolated anchor with no combos (should not happen, but keep compat).
+      if (callChains.length === 0 && outNeighbors.length > 0) {
         callChains.push({
           chain_id: `flow_${anchor.name}_01`,
           steps: [

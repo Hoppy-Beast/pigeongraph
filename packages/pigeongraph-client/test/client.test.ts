@@ -179,8 +179,12 @@ describe('Client Execution Layer & Query Surface Tests', () => {
     assert.equal(response.execution_flows.entry_points[0].handler, 'loginRoute');
 
     assert.ok(response.execution_flows.call_chains.length >= 1);
-    assert.equal(response.execution_flows.call_chains[0].steps[0].symbol, 'verifyToken');
-    assert.equal(response.execution_flows.call_chains[0].steps[1].symbol, 'getKey');
+    const deepChain = response.execution_flows.call_chains[0];
+    assert.equal(deepChain.steps[0].symbol, 'loginRoute');
+    const deepAnchorIdx = deepChain.steps.findIndex((s) => s.symbol === 'verifyToken');
+    assert.ok(deepAnchorIdx >= 0);
+    assert.equal(deepChain.steps[deepAnchorIdx].action, 'ORIGIN');
+    assert.ok(deepChain.steps.slice(deepAnchorIdx + 1).some((s) => s.symbol === 'getKey'));
 
     // Verify blast radius
     assert.ok(response.blast_radius);
@@ -305,5 +309,119 @@ describe('Client Execution Layer & Query Surface Tests', () => {
     assert.ok(response.blast_radius.affected_files?.includes('src/routes/api.ts'));
     assert.equal(response.blast_radius.risk_score, 0.55);
     assert.equal(response.blast_radius.risk_level, 'HIGH');
+  });
+
+  test('Task 1.3: deep execution flows multi-hop with cycle guard', () => {
+    const makeNode = (
+      id: string,
+      name: string,
+      opts: { isEntryPoint: boolean; entryPointType?: string; outgoingEdges?: SuperNode['substrate']['outgoingEdges'] }
+    ): SuperNode => ({
+      id,
+      urn: `urn:test:${name}`,
+      kind: 'function',
+      name,
+      qualifiedName: name,
+      repoId: 'app',
+      versioning: {
+        lamportClock: 1,
+        vectorClock: { daemon: 1 },
+        layerEpochs: { substrateEpoch: 1, semanticEpoch: 0, processEpoch: 0 },
+        contentSha256: '0'.repeat(64),
+        astStructuralHash: '0'.repeat(64),
+        semanticValidityHash: '0'.repeat(64),
+      },
+      substrate: {
+        sourceLocation: { filePath: `src/${name}.ts`, startLine: 1, startColumn: 0, endLine: 10, endColumn: 1 },
+        language: 'typescript',
+        symbolSignature: `export function ${name}()`,
+        outgoingEdges: opts.outgoingEdges ?? [],
+        astEpochTimestamp: new Date().toISOString(),
+      },
+      semantic: { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+      processFlow: {
+        isEntryPoint: opts.isEntryPoint,
+        entryPointScore: opts.isEntryPoint ? 0.95 : 0.1,
+        entryPointType: opts.entryPointType,
+        processFlowSequences: [],
+        crossRepoContracts: [],
+      },
+    });
+
+    const entryId = 'sg://app/src/entry.ts#entryFn';
+    const midId = 'sg://app/src/mid.ts#midFn';
+    const leafId = 'sg://app/src/leaf.ts#leafFn';
+    const entryNode = makeNode('sg://app/src/entry.ts#entryFn', 'entryFn', {
+      isEntryPoint: true,
+      entryPointType: 'HTTP_ROUTE',
+      outgoingEdges: [
+        { targetId: midId, kind: 'CALLS', confidence: 'EXTRACTED', confidenceScore: 1.0, provenance: 'tree-sitter-ast' },
+        {
+          targetId: entryId,
+          kind: 'HANDLES_ROUTE',
+          confidence: 'EXTRACTED',
+          confidenceScore: 0.95,
+          provenance: 'native-synthesizer',
+          dispatchMechanism: 'HTTP GET /entry',
+        },
+      ],
+    });
+    const midNode = makeNode('sg://app/src/mid.ts#midFn', 'midFn', {
+      isEntryPoint: false,
+      outgoingEdges: [
+        { targetId: leafId, kind: 'CALLS', confidence: 'EXTRACTED', confidenceScore: 1.0, provenance: 'tree-sitter-ast' },
+      ],
+    });
+    const leafNode = makeNode('sg://app/src/leaf.ts#leafFn', 'leafFn', {
+      isEntryPoint: false,
+      outgoingEdges: [
+        { targetId: midId, kind: 'CALLS', confidence: 'EXTRACTED', confidenceScore: 1.0, provenance: 'tree-sitter-ast' },
+      ],
+    });
+
+    const isoStore = new ClientGraphStore();
+    const isoReconciler = new DualBufferReconciler(isoStore);
+    isoReconciler.applySubstrateDelta({
+      protocolVersion: 1,
+      epochId: 1,
+      transactionId: 'tx-1-3-red',
+      vectorClock: { daemon: 1 },
+      timestampMs: Date.now(),
+      projectRoot: '/test',
+      reconcileMode: 'delta',
+      mutations: [
+        { type: 'NodeUpsert', node: entryNode },
+        { type: 'NodeUpsert', node: midNode },
+        { type: 'NodeUpsert', node: leafNode },
+      ],
+    });
+    const isoExplore = new SuperGraphExploreEngine(isoStore);
+    const response = isoExplore.explore({
+      query: 'midFn',
+      symbol_anchor: midId,
+      include_blast_radius: false,
+      include_spans: false,
+    });
+
+    assert.ok(response.execution_flows.call_chains.length >= 1, 'expected at least 1 chain');
+    assert.ok(response.execution_flows.call_chains.length <= 3, 'expected max 3 chains');
+    const chain = response.execution_flows.call_chains[0];
+    assert.equal(chain.steps[0].symbol, 'entryFn', 'hop 0 should be entry point');
+    const anchorStep = chain.steps.find((s) => s.symbol === 'midFn');
+    assert.ok(anchorStep, 'anchor midFn present in chain');
+    assert.equal(anchorStep.action, 'ORIGIN');
+    const anchorIdx = chain.steps.findIndex((s) => s.symbol === 'midFn');
+    assert.ok(
+      chain.steps.slice(anchorIdx + 1).some((s) => s.symbol === 'leafFn'),
+      'downstream leafFn present after anchor'
+    );
+    assert.ok(chain.steps.length <= 7, 'chain capped at 7 steps');
+    assert.equal(new Set(chain.steps.map((s) => s.symbol)).size, chain.steps.length, 'no repeated nodes (cycle guard)');
+    for (const step of chain.steps.slice(1)) {
+      assert.ok((step as { edgeKind?: string }).edgeKind, `hop ${step.hop} should carry edgeKind`);
+    }
+    assert.ok(chain.chain_id.startsWith('flow_midFn_'));
+    assert.ok(response.execution_flows.entry_points.length >= 1);
+    assert.equal(response.execution_flows.entry_points[0].route, 'HTTP GET /entry');
   });
 });
