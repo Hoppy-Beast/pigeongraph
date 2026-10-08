@@ -107,17 +107,12 @@ export function fetchSpans(
   // Enforce token budget in order.
   const included: ServedSpan[] = [];
   let used = 0;
-  let truncated = false;
   for (const span of allSpans) {
-    if (used + span.token_count > tokenBudget) {
-      truncated = true;
-      break;
-    }
+    if (used + span.token_count > tokenBudget) break;
     included.push(span);
     used += span.token_count;
   }
-  // If nothing fit but there were spans, mark truncated.
-  if (included.length < allSpans.length) truncated = true;
+  const truncated = included.length < allSpans.length;
 
   return { spans: included, truncated };
 }

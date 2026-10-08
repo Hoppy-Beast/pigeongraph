@@ -50,8 +50,21 @@ describe('span-fetcher', () => {
       { projectRoot: '/tmp/proj', tokenBudget: 50, dbContentProvider: () => big }
     );
     assert.equal(result.truncated, true);
-    assert.ok(result.spans.length < 3);
-    assert.ok(result.spans.length >= 1 || true);
+    // Each 50-line span costs ~260 tokens, far over budget 50, so nothing fits.
+    assert.equal(result.spans.length, 0);
+
+    // Partial budget: exactly enough for the first span only.
+    const firstContent = big.split('\n').slice(0, 50).join('\n');
+    const oneSpanTokens = Math.ceil(firstContent.length / 4);
+    const partial = fetchSpans(
+      [
+        { filePath: 'src/a.ts', lineRange: [1, 50] },
+        { filePath: 'src/b.ts', lineRange: [1, 50] },
+      ],
+      { projectRoot: '/tmp/proj', tokenBudget: oneSpanTokens, dbContentProvider: () => big }
+    );
+    assert.equal(partial.spans.length, 1);
+    assert.equal(partial.truncated, true);
     // token_count must match length/4 within 20%
     for (const s of result.spans) {
       const expected = Math.ceil(s.content.length / 4);
