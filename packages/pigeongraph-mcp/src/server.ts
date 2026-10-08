@@ -21,7 +21,7 @@ export class SuperGraphMcpServer {
     this.repoId = options.repoId;
     this.store = options.store ?? new ClientGraphStore();
     this.reconciler = new DualBufferReconciler(this.store);
-    this.exploreEngine = new SuperGraphExploreEngine(this.store);
+    this.exploreEngine = new SuperGraphExploreEngine(this.store, { projectRoot: this.projectRoot });
     this.analyticalEngine = new AnalyticalToolsEngine(this.store);
 
     if (options.daemon) {
@@ -67,6 +67,26 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
             include_blast_radius: {
               type: 'boolean',
               description: 'Include risk-weighted blast radius summary (default: true).',
+              default: true,
+            },
+            limit: {
+              type: 'integer',
+              description: 'Max symbols to return (default: 5, max: 20).',
+              default: 5,
+            },
+            offset: {
+              type: 'integer',
+              description: 'Pagination offset into matched symbols (default: 0).',
+              default: 0,
+            },
+            token_budget: {
+              type: 'integer',
+              description: 'Token budget for served_spans content (default: 800).',
+              default: 800,
+            },
+            include_spans: {
+              type: 'boolean',
+              description: 'Include real source slices in served_spans (default: true).',
               default: true,
             },
           },
@@ -120,6 +140,10 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
             symbol_anchor: { type: 'string' },
             depth: { type: 'integer', default: 3 },
             include_blast_radius: { type: 'boolean', default: true },
+            limit: { type: 'integer', default: 5 },
+            offset: { type: 'integer', default: 0 },
+            token_budget: { type: 'integer', default: 800 },
+            include_spans: { type: 'boolean', default: true },
           },
           required: ['query'],
         },
@@ -137,6 +161,11 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
           symbol_anchor: args.symbol_anchor ? String(args.symbol_anchor) : undefined,
           depth: typeof args.depth === 'number' ? args.depth : 3,
           include_blast_radius: args.include_blast_radius !== false,
+          limit: typeof args.limit === 'number' ? args.limit : 5,
+          offset: typeof args.offset === 'number' ? args.offset : 0,
+          token_budget: typeof args.token_budget === 'number' ? args.token_budget : 800,
+          include_spans: args.include_spans !== false,
+          projectRoot: typeof args.projectRoot === 'string' ? args.projectRoot : this.projectRoot,
         });
 
       case 'pigeongraph_impact':

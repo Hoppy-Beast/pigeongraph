@@ -85,6 +85,18 @@ async function main() {
   if (command === 'serve-mcp') {
     const daemon = new SubstrateDaemon(daemonOptions);
     await daemon.start();
+    // Ensure the first pigeongraph_explore never returns 0 results due to
+    // a cold index race (watcher.start is async). Models that see one empty
+    // result permanently fall back to grep.
+    try {
+      if (daemon.db.countNodes() === 0) {
+        await daemon.watcher.scanProject();
+      } else {
+        await daemon.watcher.flushPendingBatch();
+      }
+    } catch {
+      // ignore - serve must stay up even if initial scan fails
+    }
 
     const server = new SuperGraphMcpServer({
       projectRoot,
@@ -144,7 +156,30 @@ async function main() {
     await daemon.stop();
   } else if (command === 'explore') {
     const isRefresh = args.includes('--refresh') || args.includes('--reindex');
-    const cleanArgs = args.slice(1).filter((a) => a !== '--refresh' && a !== '--reindex');
+    const rawArgs = args.slice(1);
+    const takeNum = (flag: string): number | undefined => {
+      const idx = rawArgs.findIndex((a) => a === flag || a.startsWith(`${flag}=`));
+      if (idx === -1) return undefined;
+      const raw = rawArgs[idx].includes('=') ? rawArgs[idx].split('=')[1] : rawArgs[idx + 1];
+      const n = parseInt(raw, 10);
+      return isNaN(n) ? undefined : n;
+    };
+    const limit = takeNum('--limit');
+    const offset = takeNum('--offset');
+    const tokenBudget = takeNum('--token-budget');
+    const includeSpans = !rawArgs.includes('--no-spans');
+    const skip = new Set(['--refresh', '--reindex', '--no-spans']);
+    const cleanArgs: string[] = [];
+    for (let i = 0; i < rawArgs.length; i++) {
+      const a = rawArgs[i];
+      if (skip.has(a)) continue;
+      if (a === '--limit' || a === '--offset' || a === '--token-budget') {
+        i++;
+        continue;
+      }
+      if (a.startsWith('--limit=') || a.startsWith('--offset=') || a.startsWith('--token-budget=')) continue;
+      cleanArgs.push(a);
+    }
     const query = cleanArgs.join(' ');
     if (!query) {
       console.error('Usage: pigeongraph explore <query> [--refresh]');
@@ -157,7 +192,14 @@ async function main() {
     }
 
     const server = new SuperGraphMcpServer({ projectRoot, repoId, daemon });
-    const result = server.handleToolCall('pigeongraph_explore', { query });
+    const result = server.handleToolCall('pigeongraph_explore', {
+      query,
+      projectRoot,
+      ...(limit !== undefined ? { limit } : {}),
+      ...(offset !== undefined ? { offset } : {}),
+      ...(tokenBudget !== undefined ? { token_budget: tokenBudget } : {}),
+      ...(!includeSpans ? { include_spans: false } : {}),
+    });
     console.log(JSON.stringify(result, null, 2));
     await daemon.stop();
   } else if (command === 'ui') {
@@ -302,9 +344,12 @@ Next steps:
 
   4. Coding agent integration:
      - Cursor is already configured (.cursor/mcp.json)
-     - Agent steering rules are active (AGENTS.md, CLAUDE.md, .cursor/rules, .gemini/rules)
-     - To register global apps (Claude Desktop, Antigravity, Gemini):
+     - Claude Code is already configured (.mcp.json)
+     - Antigravity workspace is already configured (.agents/mcp_config.json + .agents/rules/)
+     - Agent steering rules are active (AGENTS.md, GEMINI.md, CLAUDE.md, .cursor/rules, .gemini/rules, .agents/rules)
+     - To register global apps (Claude Desktop, Antigravity global, Gemini):
        pigeongraph install-mcp (or: npx pigeongraph install-mcp --mode npx)
+     - After install-mcp, restart Antigravity and enable PigeonGraph in its MCP manager
     `);
   } else if (command === 'steer') {
     const written = AgentInstaller.installSteering(projectRoot);

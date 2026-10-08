@@ -1,5 +1,6 @@
 import type { SuperNode } from '@pigeongraph/schema';
 import { ClientGraphStore } from '../store/client-graph.js';
+import { fetchSpans } from './span-fetcher.js';
 
 export interface ExploreQueryInput {
   query: string;
@@ -7,7 +8,11 @@ export interface ExploreQueryInput {
   symbol_anchor?: string;
   depth?: number;
   include_blast_radius?: boolean;
+  limit?: number;
+  offset?: number;
   token_budget?: number;
+  include_spans?: boolean;
+  projectRoot?: string;
 }
 
 export interface ExploreQueryResponse {
@@ -59,13 +64,18 @@ export interface ExploreQueryResponse {
     content: string;
     token_count: number;
   }>;
+  total_matches?: number;
+  truncated?: boolean;
+  next_offset?: number;
 }
 
 export class SuperGraphExploreEngine {
   private store: ClientGraphStore;
+  private projectRoot: string;
 
-  constructor(store: ClientGraphStore) {
+  constructor(store: ClientGraphStore, opts?: { projectRoot?: string }) {
     this.store = store;
+    this.projectRoot = opts?.projectRoot ?? process.cwd();
   }
 
   public explore(input: ExploreQueryInput): ExploreQueryResponse {
@@ -91,8 +101,12 @@ export class SuperGraphExploreEngine {
     const anchor = matchedNodes[0];
     const resolvedAnchor = anchor?.id;
 
-    // 2. Format Symbol Definitions
-    const symbols = matchedNodes.slice(0, 5).map((node) => ({
+    // 2. Format Symbol Definitions (limit/offset pagination, default 5, max 20)
+    const totalMatches = matchedNodes.length;
+    const limit = Math.min(Math.max(input.limit ?? 5, 1), 20);
+    const offset = Math.max(input.offset ?? 0, 0);
+    const pagedNodes = matchedNodes.slice(offset, offset + limit);
+    const symbols = pagedNodes.map((node) => ({
       uid: node.id,
       name: node.name,
       kind: node.kind,
@@ -207,13 +221,20 @@ export class SuperGraphExploreEngine {
       };
     }
 
-    // 6. Served Spans
-    const servedSpans: ExploreQueryResponse['served_spans'] = symbols.map((sym) => ({
-      filePath: sym.filePath,
-      ranges: [sym.lineRange],
-      content: `// Source span: ${sym.name}\n${sym.signature ?? ''}`,
-      token_count: Math.ceil((sym.signature?.length ?? 20) / 4),
-    }));
+    // 6. Served Spans (real source slices via span-fetcher)
+    const includeSpans = input.include_spans !== false;
+    const tokenBudget = input.token_budget ?? 800;
+    const effectiveRoot = input.projectRoot ?? this.projectRoot;
+    let servedSpans: ExploreQueryResponse['served_spans'] = [];
+    let spansTruncated = false;
+    if (includeSpans && symbols.length > 0) {
+      const fetched = fetchSpans(
+        symbols.map((sym) => ({ filePath: sym.filePath, lineRange: sym.lineRange })),
+        { projectRoot: effectiveRoot, tokenBudget }
+      );
+      servedSpans = fetched.spans;
+      spansTruncated = fetched.truncated;
+    }
 
     const duration = performance.now() - start;
 
@@ -233,6 +254,9 @@ export class SuperGraphExploreEngine {
       dynamic_dispatches: dynamicDispatches,
       blast_radius: blastRadius,
       served_spans: servedSpans,
+      total_matches: totalMatches,
+      truncated: spansTruncated,
+      next_offset: offset + symbols.length,
     };
   }
 
