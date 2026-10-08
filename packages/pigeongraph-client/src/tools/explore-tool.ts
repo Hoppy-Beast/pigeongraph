@@ -1,6 +1,7 @@
 import type { SuperNode } from '@pigeongraph/schema';
 import { ClientGraphStore } from '../store/client-graph.js';
 import { fetchSpans } from './span-fetcher.js';
+import { computeRisk } from './risk.js';
 
 export interface ExploreQueryInput {
   query: string;
@@ -57,6 +58,7 @@ export interface ExploreQueryResponse {
     affected_files_count: number;
     affected_symbols_count: number;
     critical_breakages: string[];
+    affected_files?: string[];
   };
   served_spans: Array<{
     filePath: string;
@@ -203,21 +205,25 @@ export class SuperGraphExploreEngine {
       }
     }
 
-    // 5. Blast Radius & Risk Assessment
+    // 5. Blast Radius & Risk Assessment (bidirectional: editing a shared util
+    // must surface upstream callers as well as downstream callees).
     let blastRadius: ExploreQueryResponse['blast_radius'] = undefined;
     if (input.include_blast_radius !== false && anchor) {
-      const blast = this.store.bfsBlastRadius(anchor.id, input.depth ?? 3);
+      const blast = this.store.bfsBlastRadius(anchor.id, {
+        maxDepth: input.depth ?? 3,
+        direction: 'both',
+      });
       const affectedFiles = new Set(blast.nodes.map((n) => n.substrate.sourceLocation.filePath));
 
-      const riskScore = Math.min(1.0, (blast.nodes.length * 0.05) + (affectedFiles.size * 0.1));
-      const riskLevel = riskScore > 0.75 ? 'CRITICAL' : riskScore > 0.5 ? 'HIGH' : riskScore > 0.25 ? 'MEDIUM' : 'LOW';
+      const { score: riskScore, level: riskLevel } = computeRisk(blast.nodes);
 
       blastRadius = {
         risk_level: riskLevel,
-        risk_score: Number(riskScore.toFixed(2)),
+        risk_score: riskScore,
         affected_files_count: affectedFiles.size,
         affected_symbols_count: blast.nodes.length,
         critical_breakages: blast.nodes.slice(0, 3).map((n) => n.qualifiedName),
+        affected_files: Array.from(affectedFiles),
       };
     }
 

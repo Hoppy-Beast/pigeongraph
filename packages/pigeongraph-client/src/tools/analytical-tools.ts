@@ -1,5 +1,6 @@
 import type { SuperNode } from '@pigeongraph/schema';
 import { ClientGraphStore } from '../store/client-graph.js';
+import { computeRisk } from './risk.js';
 
 export interface ImpactQueryInput {
   target_symbol: string;
@@ -66,17 +67,16 @@ export class AnalyticalToolsEngine {
       };
     }
 
-    const blast = this.store.bfsBlastRadius(targetNode.id, maxDepth);
+    const blast = this.store.bfsBlastRadius(targetNode.id, { maxDepth, direction });
     const affectedFiles = Array.from(new Set(blast.nodes.map((n) => n.substrate.sourceLocation.filePath)));
 
-    const riskScore = Math.min(1.0, (blast.nodes.length * 0.08) + (affectedFiles.length * 0.12));
-    const riskLevel = riskScore > 0.7 ? 'CRITICAL' : riskScore > 0.45 ? 'HIGH' : riskScore > 0.2 ? 'MEDIUM' : 'LOW';
+    const { score: riskScore, level: riskLevel } = computeRisk(blast.nodes);
 
     return {
       target: targetNode.id,
       direction,
       risk_level: riskLevel,
-      risk_score: Number(riskScore.toFixed(2)),
+      risk_score: riskScore,
       total_affected_nodes: blast.nodes.length,
       affected_files: affectedFiles,
       affected_nodes: blast.nodes.map((n) => ({

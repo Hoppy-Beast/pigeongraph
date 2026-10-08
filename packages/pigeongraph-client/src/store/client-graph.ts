@@ -17,6 +17,14 @@ export interface ClientEdgeAttributes {
   status: 'PROVISIONAL' | 'CONFIRMED' | 'PROVISIONAL_RETAINED';
 }
 
+export type BlastDirection = 'upstream' | 'downstream' | 'both';
+
+export interface BlastRadiusOptions {
+  maxDepth?: number;
+  direction?: BlastDirection;
+  edgeAllowlist?: string[];
+}
+
 export class ClientGraphStore {
   // @ts-ignore
   private graph: any;
@@ -101,25 +109,71 @@ export class ClientGraphStore {
     return this.graph.inNeighbors(nodeId).map((id: string) => this.graph.getNodeAttribute(id, 'node') as SuperNode);
   }
 
-  public bfsBlastRadius(startNodeId: string, maxDepth = 3): {
+  public bfsBlastRadius(
+    startNodeId: string,
+    maxDepthOrOptions: number | BlastRadiusOptions = 3
+  ): {
     nodes: SuperNode[];
     edgeCount: number;
     depthMap: Map<string, number>;
   } {
+    const opts: BlastRadiusOptions =
+      typeof maxDepthOrOptions === 'number' ? { maxDepth: maxDepthOrOptions } : maxDepthOrOptions;
+    const maxDepth = opts.maxDepth ?? 3;
+    // Default downstream preserves pre-1.2 behavior for legacy numeric callers.
+    const direction: BlastDirection = opts.direction ?? 'downstream';
+    const allowlist = opts.edgeAllowlist ? new Set(opts.edgeAllowlist) : null;
+
     const visited = new Set<string>();
     const depthMap = new Map<string, number>();
     const queue: Array<{ id: string; depth: number }> = [{ id: startNodeId, depth: 0 }];
+    // NOTE: start id is marked visited even when the node is missing (legacy
+    // behavior); getNode() filters it out of `nodes` below.
     visited.add(startNodeId);
     depthMap.set(startNodeId, 0);
 
     let edgeCount = 0;
 
+    const neighborsOf = (id: string): string[] => {
+      if (!this.graph.hasNode(id)) return [];
+      if (direction === 'downstream') return this.graph.outNeighbors(id);
+      if (direction === 'upstream') return this.graph.inNeighbors(id);
+      return Array.from(new Set([...this.graph.outNeighbors(id), ...this.graph.inNeighbors(id)]));
+    };
+
+    // Edge-kind-filtered traversal; counts each traversed edge individually.
+    const traverseAllowedEdges = (id: string, depth: number): void => {
+      if (!this.graph.hasNode(id)) return;
+      const visit = (edgeKeys: string[], neighborOf: (attrs: ClientEdgeAttributes) => string) => {
+        for (const key of edgeKeys) {
+          const attrs = this.graph.getEdgeAttributes(key) as ClientEdgeAttributes;
+          if (!allowlist!.has(attrs.edge.kind)) continue;
+          edgeCount++;
+          const neighborId = neighborOf(attrs);
+          if (!visited.has(neighborId)) {
+            visited.add(neighborId);
+            depthMap.set(neighborId, depth + 1);
+            queue.push({ id: neighborId, depth: depth + 1 });
+          }
+        }
+      };
+      if (direction === 'downstream' || direction === 'both') {
+        visit(this.graph.outEdges(id), (attrs) => attrs.target);
+      }
+      if (direction === 'upstream' || direction === 'both') {
+        visit(this.graph.inEdges(id), (attrs) => attrs.source);
+      }
+    };
+
     while (queue.length > 0) {
       const { id, depth } = queue.shift()!;
       if (depth >= maxDepth) continue;
 
-      const outNeighbors = this.graph.hasNode(id) ? this.graph.outNeighbors(id) : [];
-      for (const neighborId of outNeighbors) {
+      if (allowlist) {
+        traverseAllowedEdges(id, depth);
+        continue;
+      }
+      for (const neighborId of neighborsOf(id)) {
         edgeCount++;
         if (!visited.has(neighborId)) {
           visited.add(neighborId);

@@ -240,4 +240,70 @@ describe('Client Execution Layer & Query Surface Tests', () => {
     assert.ok(response.execution_flows.entry_points.length >= 1);
     assert.equal(response.execution_flows.entry_points[0].route, 'HTTP POST /api/login');
   });
+
+  test('Task 1.2: bfsBlastRadius honors upstream/downstream/both directions', () => {
+    // Linear chain: loginRoute -> verifyToken -> getKey; anchor on middle node.
+    const downstream = store.bfsBlastRadius(nodeA.id, { maxDepth: 3, direction: 'downstream' });
+    assert.deepEqual(
+      new Set(downstream.nodes.map((n) => n.id)),
+      new Set([nodeA.id, nodeB.id])
+    );
+
+    const upstream = store.bfsBlastRadius(nodeA.id, { maxDepth: 3, direction: 'upstream' });
+    assert.deepEqual(
+      new Set(upstream.nodes.map((n) => n.id)),
+      new Set([nodeRoute.id, nodeA.id])
+    );
+
+    const both = store.bfsBlastRadius(nodeA.id, { maxDepth: 3, direction: 'both' });
+    assert.deepEqual(
+      new Set(both.nodes.map((n) => n.id)),
+      new Set([nodeRoute.id, nodeA.id, nodeB.id])
+    );
+
+    // Backward compat: numeric second arg still means downstream.
+    const legacy = store.bfsBlastRadius(nodeA.id, 3);
+    assert.deepEqual(
+      new Set(legacy.nodes.map((n) => n.id)),
+      new Set([nodeA.id, nodeB.id])
+    );
+  });
+
+  test('Task 1.2: calculateImpact honors direction with unified risk', () => {
+    const down = analyticalEngine.calculateImpact({
+      target_symbol: 'verifyToken',
+      direction: 'downstream',
+      max_depth: 3,
+    });
+    assert.equal(down.total_affected_nodes, 2);
+    assert.equal(down.risk_score, 0.3);
+    assert.equal(down.risk_level, 'MEDIUM');
+
+    const up = analyticalEngine.calculateImpact({
+      target_symbol: 'verifyToken',
+      direction: 'upstream',
+      max_depth: 3,
+    });
+    assert.equal(up.total_affected_nodes, 2);
+    assert.ok(up.affected_nodes.some((n) => n.uid === nodeRoute.id));
+    assert.ok(!up.affected_nodes.some((n) => n.uid === nodeB.id));
+    assert.equal(up.risk_score, 0.4);
+
+    // Deterministic: repeated calls agree.
+    const again = analyticalEngine.calculateImpact({
+      target_symbol: 'verifyToken',
+      direction: 'upstream',
+      max_depth: 3,
+    });
+    assert.deepEqual(again, up);
+  });
+
+  test('Task 1.2: explore blast radius uses both directions with unified risk', () => {
+    const response = exploreEngine.explore({ query: 'verifyToken', include_blast_radius: true });
+    assert.ok(response.blast_radius);
+    assert.equal(response.blast_radius.affected_symbols_count, 3);
+    assert.ok(response.blast_radius.affected_files?.includes('src/routes/api.ts'));
+    assert.equal(response.blast_radius.risk_score, 0.55);
+    assert.equal(response.blast_radius.risk_level, 'HIGH');
+  });
 });
