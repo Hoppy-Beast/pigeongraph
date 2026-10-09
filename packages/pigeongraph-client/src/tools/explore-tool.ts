@@ -14,7 +14,16 @@ export interface ExploreQueryInput {
   offset?: number;
   token_budget?: number;
   include_spans?: boolean;
+  include_semantic?: boolean;
   projectRoot?: string;
+}
+
+export interface SemanticContextEntry {
+  uid: string;
+  conceptualSummary?: string;
+  implements_spec: Array<{ reqId: string; title?: string; status?: string }>;
+  justified_by_adr: Array<{ adrId: string; title?: string; status?: string }>;
+  confidence?: string;
 }
 
 export interface ExploreQueryResponse {
@@ -72,6 +81,57 @@ export interface ExploreQueryResponse {
   total_matches?: number;
   truncated?: boolean;
   next_offset?: number;
+  semantic_context?: SemanticContextEntry[];
+}
+
+/**
+ * Builds the semantic context entry for the top anchor only (token-bounded).
+ * Reads Layer 2 fields already on the SuperNode; never mutates reconcile state.
+ * Returns undefined when the anchor carries no semantic links (no placeholders).
+ */
+function buildSemanticContext(anchor: SuperNode): SemanticContextEntry | undefined {
+  const sem = anchor.semantic;
+  const implEdges = anchor.substrate.outgoingEdges.filter((e) =>
+    e.dispatchMechanism?.startsWith('IMPLEMENTS_SPEC:')
+  );
+  const adrEdges = anchor.substrate.outgoingEdges.filter((e) =>
+    e.dispatchMechanism?.startsWith('JUSTIFIED_BY_ADR:')
+  );
+
+  const implements_spec: SemanticContextEntry['implements_spec'] = implEdges.map((e) => {
+    const reqId = e.dispatchMechanism!.split(':').slice(1).join(':').trim();
+    const assoc = sem.multimodalAssociations?.find((a) => e.targetId.includes(a.uri));
+    return {
+      reqId,
+      ...(assoc?.title ? { title: assoc.title } : {}),
+    };
+  });
+
+  const justified_by_adr: SemanticContextEntry['justified_by_adr'] = [
+    ...(sem.adrReferences?.map((a) => ({ adrId: a.adrId, title: a.title, status: a.status })) ?? []),
+  ];
+  for (const e of adrEdges) {
+    const adrId = e.dispatchMechanism!.split(':').slice(1).join(':').trim();
+    if (!justified_by_adr.some((a) => a.adrId === adrId)) {
+      justified_by_adr.push({ adrId });
+    }
+  }
+
+  const hasContent =
+    (sem.conceptualSummary?.length ?? 0) > 0 || implements_spec.length > 0 || justified_by_adr.length > 0;
+  if (!hasContent) return undefined;
+
+  const linkEdges = [...implEdges, ...adrEdges];
+  const confidence =
+    linkEdges.find((e) => e.confidence === 'EXTRACTED')?.confidence ?? linkEdges[0]?.confidence;
+
+  return {
+    uid: anchor.id,
+    ...(sem.conceptualSummary ? { conceptualSummary: sem.conceptualSummary } : {}),
+    implements_spec,
+    justified_by_adr,
+    ...(confidence ? { confidence } : {}),
+  };
 }
 
 export class SuperGraphExploreEngine {
@@ -384,6 +444,13 @@ export class SuperGraphExploreEngine {
 
     const duration = performance.now() - start;
 
+    // 7. Semantic Context (top anchor only, token-bounded; opt-out via include_semantic: false)
+    let semanticContext: SemanticContextEntry[] | undefined;
+    if (input.include_semantic !== false && anchor) {
+      const entry = buildSemanticContext(anchor);
+      if (entry) semanticContext = [entry];
+    }
+
     return {
       query_summary: {
         query: input.query,
@@ -405,6 +472,7 @@ export class SuperGraphExploreEngine {
       total_matches: totalMatches,
       truncated: spansTruncated,
       next_offset: offset + symbols.length,
+      semantic_context: semanticContext,
     };
   }
 }

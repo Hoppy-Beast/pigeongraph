@@ -447,4 +447,137 @@ describe('Client Execution Layer & Query Surface Tests', () => {
     assert.equal(trace.from, nodeA.id);
     assert.equal(trace.to, nodeB.id);
   });
+
+  test('Task 3.1: explore surfaces semantic_context for ADR-linked anchor only', () => {
+    const linkedId = 'sg://app/src/billing/invoice.ts#chargeInvoice';
+    const plainId = 'sg://app/src/util/format.ts#formatMoney';
+    const linkedNode: SuperNode = {
+      id: linkedId,
+      urn: 'urn:test:chargeInvoice',
+      kind: 'function',
+      name: 'chargeInvoice',
+      qualifiedName: 'chargeInvoice',
+      repoId: 'app',
+      versioning: {
+        lamportClock: 1,
+        vectorClock: { daemon: 1 },
+        layerEpochs: { substrateEpoch: 1, semanticEpoch: 0, processEpoch: 0 },
+        contentSha256: '0'.repeat(64),
+        astStructuralHash: '0'.repeat(64),
+        semanticValidityHash: '0'.repeat(64),
+      },
+      substrate: {
+        sourceLocation: { filePath: 'src/billing/invoice.ts', startLine: 1, startColumn: 0, endLine: 20, endColumn: 1 },
+        language: 'typescript',
+        symbolSignature: 'export function chargeInvoice(id: string)',
+        outgoingEdges: [
+          {
+            targetId: 'sg://app/docs/billing-spec.md#REQ-001',
+            kind: 'IMPLEMENTS',
+            confidence: 'EXTRACTED',
+            confidenceScore: 0.95,
+            provenance: 'llm-inference',
+            dispatchMechanism: 'IMPLEMENTS_SPEC: REQ-001',
+          },
+          {
+            targetId: 'sg://app/docs/adr/adr-007.md#ADR-007',
+            kind: 'REFERENCES',
+            confidence: 'EXTRACTED',
+            confidenceScore: 0.95,
+            provenance: 'llm-inference',
+            dispatchMechanism: 'JUSTIFIED_BY_ADR: ADR-007',
+          },
+        ],
+        astEpochTimestamp: new Date().toISOString(),
+      },
+      semantic: {
+        validityStatus: 'VALID',
+        conceptualSummary: 'Charges an invoice via the billing provider.',
+        adrReferences: [{ adrId: 'ADR-007', title: 'Usage-Based Billing', status: 'ACCEPTED' }],
+        multimodalAssociations: [
+          { assetType: 'markdown_doc', uri: 'docs/billing-spec.md', title: 'Billing Spec', relevanceScore: 0.9, extractedSnippet: 'REQ-001: chargeInvoice must bill.' },
+        ],
+        communityClusters: [],
+        semanticEmbeddings: [],
+      },
+      processFlow: { isEntryPoint: false, entryPointScore: 0.1, processFlowSequences: [], crossRepoContracts: [] },
+    };
+    const plainNode: SuperNode = {
+      id: plainId,
+      urn: 'urn:test:formatMoney',
+      kind: 'function',
+      name: 'formatMoney',
+      qualifiedName: 'formatMoney',
+      repoId: 'app',
+      versioning: {
+        lamportClock: 1,
+        vectorClock: { daemon: 1 },
+        layerEpochs: { substrateEpoch: 1, semanticEpoch: 0, processEpoch: 0 },
+        contentSha256: '0'.repeat(64),
+        astStructuralHash: '0'.repeat(64),
+        semanticValidityHash: '0'.repeat(64),
+      },
+      substrate: {
+        sourceLocation: { filePath: 'src/util/format.ts', startLine: 1, startColumn: 0, endLine: 10, endColumn: 1 },
+        language: 'typescript',
+        symbolSignature: 'export function formatMoney(n: number)',
+        outgoingEdges: [],
+        astEpochTimestamp: new Date().toISOString(),
+      },
+      semantic: { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+      processFlow: { isEntryPoint: false, entryPointScore: 0.1, processFlowSequences: [], crossRepoContracts: [] },
+    };
+
+    const isoStore = new ClientGraphStore();
+    const isoReconciler = new DualBufferReconciler(isoStore);
+    isoReconciler.applySubstrateDelta({
+      protocolVersion: 1,
+      epochId: 1,
+      transactionId: 'tx-3-1-red',
+      vectorClock: { daemon: 1 },
+      timestampMs: Date.now(),
+      projectRoot: '/test',
+      reconcileMode: 'delta',
+      mutations: [
+        { type: 'NodeUpsert', node: linkedNode },
+        { type: 'NodeUpsert', node: plainNode },
+      ],
+    });
+    const isoExplore = new SuperGraphExploreEngine(isoStore);
+
+    const linked = isoExplore.explore({
+      query: 'chargeInvoice',
+      symbol_anchor: linkedId,
+      include_blast_radius: false,
+      include_spans: false,
+    });
+    assert.ok(linked.semantic_context, 'expected semantic_context for linked anchor');
+    assert.equal(linked.semantic_context.length, 1);
+    const entry = linked.semantic_context[0];
+    assert.equal(entry.uid, linkedId);
+    assert.equal(entry.conceptualSummary, 'Charges an invoice via the billing provider.');
+    assert.ok(entry.implements_spec.some((s) => s.reqId === 'REQ-001'), 'expected REQ-001 in implements_spec');
+    assert.ok(entry.justified_by_adr.some((a) => a.adrId === 'ADR-007'), 'expected ADR-007 in justified_by_adr');
+    assert.equal(entry.confidence, 'EXTRACTED');
+
+    const unlinked = isoExplore.explore({
+      query: 'formatMoney',
+      symbol_anchor: plainId,
+      include_blast_radius: false,
+      include_spans: false,
+    });
+    assert.ok(
+      unlinked.semantic_context === undefined || unlinked.semantic_context.length === 0,
+      'unlinked anchor must show empty/undefined, no placeholder'
+    );
+
+    const compact = isoExplore.explore({
+      query: 'chargeInvoice',
+      symbol_anchor: linkedId,
+      include_blast_radius: false,
+      include_spans: false,
+      include_semantic: false,
+    });
+    assert.equal(compact.semantic_context, undefined);
+  });
 });
