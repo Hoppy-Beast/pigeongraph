@@ -55,6 +55,26 @@ export class ClientGraphStore {
     }
   }
 
+  /**
+   * Task 4.3: cascade-delete every node whose
+   * `sourceLocation.filePath === filePath`. Graphology's `dropNode`
+   * removes incident edges, so cross-file edges into/out of the
+   * deleted file disappear with the nodes. Returns the removed count.
+   */
+  public removeNodesByFile(filePath: string): number {
+    const victims: string[] = [];
+    for (const id of this.graph.nodes()) {
+      const node = this.graph.getNodeAttribute(id, 'node') as SuperNode | undefined;
+      if (node?.substrate.sourceLocation.filePath === filePath) {
+        victims.push(id);
+      }
+    }
+    for (const id of victims) {
+      this.graph.dropNode(id);
+    }
+    return victims.length;
+  }
+
   public upsertEdge(
     sourceId: string,
     targetId: string,

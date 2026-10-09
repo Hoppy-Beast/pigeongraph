@@ -4,6 +4,7 @@ import { ClientGraphStore } from '../store/client-graph.js';
 export class DualBufferReconciler {
   private activeStore: ClientGraphStore;
   private pendingSemanticPatches = new Map<string, Partial<SuperNode['semantic']>>();
+  private lastGcEpoch = 0;
 
   constructor(store: ClientGraphStore) {
     this.activeStore = store;
@@ -38,6 +39,7 @@ export class DualBufferReconciler {
           this.activeStore.removeNode(mutation.nodeId);
           break;
         case 'FileDelete':
+          this.activeStore.removeNodesByFile(mutation.filePath);
           break;
       }
     }
@@ -53,6 +55,16 @@ export class DualBufferReconciler {
       if (mutation.type === 'EdgeUpsert') {
         this.activeStore.upsertEdge(mutation.sourceId, mutation.targetId, mutation.edge, 'CONFIRMED');
       }
+    }
+
+    // Task 4.3 epoch GC: every 10 epochs, compact tombstone state.
+    // Graphology drops nodes/edges eagerly (dropNode removes incident
+    // edges), so there is no separate tombstone map to sweep; the GC
+    // checkpoint is a no-op over live nodes by design — it only advances
+    // lastGcEpoch so the next window is deterministic. Live nodes are
+    // never touched here.
+    if (envelope.epochId - this.lastGcEpoch >= 10) {
+      this.lastGcEpoch = envelope.epochId;
     }
 
     return { appliedMutations: count };
