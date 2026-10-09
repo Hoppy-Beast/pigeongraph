@@ -157,6 +157,10 @@ export class AstExtractor {
     const importRegex = /^\s*import\s+(?:\{([^}]+)\}|([a-zA-Z0-9_$]+))\s+from\s+['"]([^'"]+)['"]/i;
     const functionRegex = /^\s*(?:export\s+)?(?:async\s+)?function\s+([a-zA-Z0-9_$]+)\s*(?:\(([^)]*)\))?/i;
     const arrowFnRegex = /^\s*(?:export\s+)?(?:const|let)\s+([a-zA-Z0-9_$]+)(?:\s*:\s*[^=]+)?\s*=\s*(?:async\s*)?(?:<[^>]+>\s*)?(?:\([^)]*\)|[a-zA-Z0-9_$]+|\()/i;
+    const interfaceRegex = /^\s*(?:export\s+)?(?:default\s+)?interface\s+([A-Za-z0-9_$]+)/;
+    const enumRegex = /^\s*(?:export\s+)?(?:const\s+)?enum\s+([A-Za-z0-9_$]+)/;
+    const typeAliasRegex = /^\s*(?:export\s+)?type\s+([A-Za-z0-9_$]+)\s*(?:<[^>]*>)?\s*=/;
+    const importedSymbolTargets = new Map<string, string>();
 
     let currentClassNode: SuperNode | null = null;
     let braceDepth = 0;
@@ -185,12 +189,18 @@ export class AstExtractor {
       // Imports
       const importMatch = line.match(importRegex);
       if (importMatch) {
-        const importedSymbols = (importMatch[1] ?? importMatch[2] ?? '').split(',').map((s) => s.trim());
+        const rawSymbols = (importMatch[1] ?? importMatch[2] ?? '').split(',').map((s) => s.trim());
         const modulePath = importMatch[3];
-        for (const symbol of importedSymbols) {
-          if (!symbol) continue;
+        for (const raw of rawSymbols) {
+          if (!raw) continue;
+          const asParts = raw.split(/\s+as\s+/i).map((s) => s.trim()).filter(Boolean);
+          const original = (asParts[0] ?? raw).replace(/^type\s+/i, '').trim();
+          const local = (asParts.length > 1 ? asParts[asParts.length - 1] : original).replace(/^type\s+/i, '').trim();
+          if (!local || !original) continue;
+          const targetId = `sg://${repoId}/${modulePath}#${original}`;
+          importedSymbolTargets.set(local, targetId);
           const importEdge: SubstrateEdge = {
-            targetId: `sg://${repoId}/${modulePath}#${symbol}`,
+            targetId,
             kind: 'IMPORTS',
             confidence: 'EXTRACTED',
             confidenceScore: 1.0,
@@ -198,14 +208,72 @@ export class AstExtractor {
             location: {
               filePath,
               startLine: lineNum,
-              startColumn: line.indexOf(symbol),
+              startColumn: line.indexOf(local),
               endLine: lineNum,
-              endColumn: line.indexOf(symbol) + symbol.length,
+              endColumn: line.indexOf(local) + local.length,
             },
           };
           fileNode.substrate.outgoingEdges.push(importEdge);
           edges.push({ sourceId: fileNode.id, targetId: importEdge.targetId, edge: importEdge });
         }
+        continue;
+      }
+
+      // Interface / Enum / Type alias declarations
+      const typeDecl = (() => {
+        const im = line.match(interfaceRegex);
+        if (im) return { name: im[1], kind: 'interface' as const };
+        const em = line.match(enumRegex);
+        if (em) return { name: em[1], kind: 'enum' as const };
+        const tm = line.match(typeAliasRegex);
+        if (tm) return { name: tm[1], kind: 'type_alias' as const };
+        return null;
+      })();
+      if (typeDecl) {
+        const typeNodeId = `sg://${repoId}/${filePath}#${typeDecl.name}`;
+        const isExported = trimmed.startsWith('export');
+        const typeNode: SuperNode = {
+          id: typeNodeId,
+          urn: `urn:supergraph:${repoId}:${filePath}#${typeDecl.name}`,
+          kind: typeDecl.kind,
+          name: typeDecl.name,
+          qualifiedName: typeDecl.name,
+          repoId,
+          versioning: {
+            lamportClock,
+            vectorClock: { substrate: lamportClock },
+            layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
+            contentSha256: computeContentHash(line),
+            astStructuralHash: computeAstStructuralHash(line),
+            semanticValidityHash: computeSemanticValidityHash({ name: typeDecl.name, kind: typeDecl.kind }),
+            lastModifiedTimestampMs: Date.now(),
+          },
+          substrate: {
+            sourceLocation: {
+              filePath,
+              startLine: lineNum,
+              startColumn: line.indexOf(typeDecl.name),
+              endLine: lineNum + 10,
+              endColumn: 1,
+            },
+            language: 'typescript',
+            symbolSignature: line.trim(),
+            visibility: isExported ? 'public' : 'internal',
+            modifiers: isExported ? ['exported'] : [],
+            outgoingEdges: [],
+            astEpochTimestamp: new Date().toISOString(),
+          },
+          semantic: { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+          processFlow: { isEntryPoint: false, entryPointScore: 0, processFlowSequences: [], crossRepoContracts: [] },
+        };
+        fileNode.substrate.outgoingEdges.push({
+          targetId: typeNodeId,
+          kind: 'CONTAINS',
+          confidence: 'EXTRACTED',
+          confidenceScore: 1.0,
+          provenance: 'tree-sitter-ast',
+        });
+        nodes.push(typeNode);
         continue;
       }
 
@@ -527,6 +595,65 @@ export class AstExtractor {
         });
 
         nodes.push(fnNode);
+      }
+    }
+
+    // Second pass: TS/JS CALLS resolution (same-file scope + imports map)
+    const skipKeywords = new Set([
+      'if',
+      'for',
+      'while',
+      'switch',
+      'catch',
+      'return',
+      'throw',
+      'new',
+      'function',
+      'import',
+      'export',
+      'typeof',
+    ]);
+    const funcMethodNodes = nodes.filter((n) => n.kind === 'function' || n.kind === 'method');
+    for (const callerNode of funcMethodNodes) {
+      const startLine = callerNode.substrate.sourceLocation.startLine;
+      const endLine = callerNode.substrate.sourceLocation.endLine;
+      const bodyLines = lines.slice(Math.max(0, startLine - 1), Math.min(lines.length, endLine));
+      const bodyText = bodyLines.join('\n');
+      const callSiteRegex = /\b([A-Za-z_$][\w$]*)\s*\(/g;
+      let callMatch: RegExpExecArray | null;
+      while ((callMatch = callSiteRegex.exec(bodyText)) !== null) {
+        const calledName = callMatch[1];
+        if (skipKeywords.has(calledName)) continue;
+        if (calledName === callerNode.name) continue;
+        const callee = funcMethodNodes.find(
+          (n) =>
+            n.id !== callerNode.id &&
+            (n.name === calledName ||
+              n.qualifiedName === calledName ||
+              n.qualifiedName.endsWith(`.${calledName}`))
+        );
+        let targetId: string | null = null;
+        if (callee) {
+          targetId = callee.id;
+        } else if (importedSymbolTargets.has(calledName)) {
+          targetId = importedSymbolTargets.get(calledName) ?? null;
+        } else {
+          continue;
+        }
+        if (!targetId) continue;
+        const alreadyHas = callerNode.substrate.outgoingEdges.some(
+          (e) => e.targetId === targetId && e.kind === 'CALLS'
+        );
+        if (alreadyHas) continue;
+        const callEdge: SubstrateEdge = {
+          targetId,
+          kind: 'CALLS',
+          confidence: 'EXTRACTED',
+          confidenceScore: 1.0,
+          provenance: 'tree-sitter-ast',
+        };
+        callerNode.substrate.outgoingEdges.push(callEdge);
+        edges.push({ sourceId: callerNode.id, targetId, edge: callEdge });
       }
     }
   }

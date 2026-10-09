@@ -611,4 +611,57 @@ def get_exam():
     assert.equal(row.msg, 'pong');
     testDb.close();
   });
+
+  test('AstExtractor resolves TS CALLS same-file and indexes interface/enum/type_alias', () => {
+    const tsCode = `
+      import { helper } from './util.js';
+
+      export interface User {
+        name: string;
+      }
+
+      export enum Role {
+        Admin = "admin",
+        User = "user",
+      }
+
+      export type ID = string;
+
+      export function callee(): number {
+        return 1;
+      }
+
+      export function caller(): number {
+        return callee();
+      }
+    `;
+
+    const { nodes, edges } = extractor.parseFile({
+      repoId: 'test-repo',
+      filePath: 'src/calls.ts',
+      content: tsCode,
+      epoch: 1,
+      lamportClock: 1,
+    });
+
+    const caller = nodes.find((n) => n.name === 'caller');
+    const callee = nodes.find((n) => n.name === 'callee');
+    assert.ok(caller, 'caller function must be parsed');
+    assert.ok(callee, 'callee function must be parsed');
+
+    const callEdges = edges.filter((e) => e.edge.kind === 'CALLS' && e.sourceId === caller?.id);
+    assert.ok(
+      callEdges.some((e) => e.targetId === callee?.id),
+      'caller must have CALLS edge to same-file callee'
+    );
+
+    const iface = nodes.find((n) => n.kind === 'interface' && n.name === 'User');
+    assert.ok(iface, 'interface User must be indexed');
+
+    const enumNode = nodes.find((n) => n.kind === 'enum' && n.name === 'Role');
+    assert.ok(enumNode, 'enum Role must be indexed');
+
+    const alias = nodes.find((n) => n.kind === 'type_alias' && n.name === 'ID');
+    assert.ok(alias, 'type alias ID must be indexed');
+  });
 });
