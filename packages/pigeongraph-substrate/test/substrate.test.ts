@@ -1024,6 +1024,13 @@ int add(int a, int b) {
 static void helper(void)
 {
 }
+void sort(int *arr, int n) {
+  (void)arr;
+  (void)n;
+}
+int scanf_wrapper(const char *fmt) {
+  return fmt ? 0 : -1;
+}
 int prototype(int x);
     `;
 
@@ -1044,6 +1051,13 @@ int prototype(int x);
 
     const helperFn = cNodes.find((n) => n.kind === 'function' && n.name === 'helper');
     assert.ok(helperFn, 'C function with brace on next line must be indexed');
+
+    const sortFn = cNodes.find((n) => n.kind === 'function' && n.name === 'sort');
+    assert.ok(sortFn, 's-initial C function sort must keep its leading s');
+    assert.equal(sortFn?.substrate.returnType, 'void');
+
+    const scanfFn = cNodes.find((n) => n.kind === 'function' && n.name === 'scanf_wrapper');
+    assert.ok(scanfFn, 's-initial C function scanf_wrapper must keep its leading s');
 
     const proto = cNodes.find((n) => n.name === 'prototype');
     assert.equal(proto, undefined, 'C prototypes ending with ; must be skipped');

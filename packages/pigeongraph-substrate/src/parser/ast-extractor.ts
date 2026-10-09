@@ -1249,7 +1249,7 @@ export class AstExtractor {
         const m = line.match(cFuncRegex);
         if (!m) continue;
         const returnRaw = m[1].replace(/\s+/g, ' ').trim();
-        const nameRaw = m[2].replace(/^[\*&\\s]+/, '').trim();
+        const nameRaw = m[2].replace(/^[*&\s]+/, '').trim();
         const paramsRaw = m[3] ?? '';
         const trailer = m[4] ?? '';
         const parenIdx = trimmed.indexOf('(');
