@@ -15,6 +15,9 @@ export interface ExploreQueryInput {
   token_budget?: number;
   include_spans?: boolean;
   include_semantic?: boolean;
+  include_flows?: boolean;
+  include_dispatches?: boolean;
+  compact?: boolean;
   projectRoot?: string;
 }
 
@@ -185,8 +188,10 @@ export class SuperGraphExploreEngine {
     }));
 
     // 3. Execution Flows (In-neighbors / Out-neighbors)
+    // Gated by include_flows (default true); compact skips.
     const entryPoints: ExploreQueryResponse['execution_flows']['entry_points'] = [];
     const callChains: ExploreQueryResponse['execution_flows']['call_chains'] = [];
+    const includeFlows = input.compact !== true && input.include_flows !== false;
 
     const resolveRouteMechanism = (n: SuperNode): string | undefined => {
       for (const e of n.substrate.outgoingEdges) {
@@ -204,7 +209,7 @@ export class SuperGraphExploreEngine {
       return undefined;
     };
 
-    if (anchor) {
+    if (anchor && includeFlows) {
       if (anchor.processFlow.isEntryPoint) {
         entryPoints.push({
           type: anchor.processFlow.entryPointType ?? 'ENTRY_POINT',
@@ -376,9 +381,10 @@ export class SuperGraphExploreEngine {
       }
     }
 
-    // 4. Dynamic Dispatches
+    // 4. Dynamic Dispatches (gated by include_dispatches; compact skips)
     const dynamicDispatches: ExploreQueryResponse['dynamic_dispatches'] = [];
-    if (anchor) {
+    const includeDispatches = input.compact !== true && input.include_dispatches !== false;
+    if (anchor && includeDispatches) {
       for (const edge of anchor.substrate.outgoingEdges) {
         if (edge.kind.startsWith('DYNAMIC_DISPATCH') || edge.kind === 'HANDLES_ROUTE') {
           dynamicDispatches.push({
@@ -407,8 +413,9 @@ export class SuperGraphExploreEngine {
 
     // 5. Blast Radius & Risk Assessment (bidirectional: editing a shared util
     // must surface upstream callers as well as downstream callees).
+    // Gated by include_blast_radius; compact skips.
     let blastRadius: ExploreQueryResponse['blast_radius'] = undefined;
-    if (input.include_blast_radius !== false && anchor) {
+    if (input.include_blast_radius !== false && input.compact !== true && anchor) {
       const blast = this.store.bfsBlastRadius(anchor.id, {
         maxDepth: input.depth ?? 3,
         direction: 'both',
@@ -427,8 +434,8 @@ export class SuperGraphExploreEngine {
       };
     }
 
-    // 6. Served Spans (real source slices via span-fetcher)
-    const includeSpans = input.include_spans !== false;
+    // 6. Served Spans (real source slices via span-fetcher; compact skips)
+    const includeSpans = input.compact !== true && input.include_spans !== false;
     const tokenBudget = input.token_budget ?? 800;
     const effectiveRoot = input.projectRoot ?? this.projectRoot;
     let servedSpans: ExploreQueryResponse['served_spans'] = [];
@@ -444,9 +451,9 @@ export class SuperGraphExploreEngine {
 
     const duration = performance.now() - start;
 
-    // 7. Semantic Context (top anchor only, token-bounded; opt-out via include_semantic: false)
+    // 7. Semantic Context (top anchor only, token-bounded; opt-out via include_semantic: false; compact skips)
     let semanticContext: SemanticContextEntry[] | undefined;
-    if (input.include_semantic !== false && anchor) {
+    if (input.include_semantic !== false && input.compact !== true && anchor) {
       const entry = buildSemanticContext(anchor);
       if (entry) semanticContext = [entry];
     }

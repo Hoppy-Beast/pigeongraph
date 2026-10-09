@@ -89,6 +89,26 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
               description: 'Include real source slices in served_spans (default: true).',
               default: true,
             },
+            include_semantic: {
+              type: 'boolean',
+              description: 'Include Layer 2 semantic context for the anchor (default: true).',
+              default: true,
+            },
+            include_flows: {
+              type: 'boolean',
+              description: 'Include execution flows entry_points/call_chains (default: true).',
+              default: true,
+            },
+            include_dispatches: {
+              type: 'boolean',
+              description: 'Include dynamic dispatches (default: true).',
+              default: true,
+            },
+            compact: {
+              type: 'boolean',
+              description: 'Compact mode: symbols + query_summary + pagination only (default: false).',
+              default: false,
+            },
           },
           required: ['query'],
         },
@@ -144,6 +164,10 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
             offset: { type: 'integer', default: 0 },
             token_budget: { type: 'integer', default: 800 },
             include_spans: { type: 'boolean', default: true },
+            include_semantic: { type: 'boolean', default: true },
+            include_flows: { type: 'boolean', default: true },
+            include_dispatches: { type: 'boolean', default: true },
+            compact: { type: 'boolean', default: false },
           },
           required: ['query'],
         },
@@ -165,6 +189,10 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
           offset: typeof args.offset === 'number' ? args.offset : 0,
           token_budget: typeof args.token_budget === 'number' ? args.token_budget : 800,
           include_spans: args.include_spans !== false,
+          include_semantic: args.include_semantic !== false,
+          include_flows: args.include_flows !== false,
+          include_dispatches: args.include_dispatches !== false,
+          compact: args.compact === true,
           projectRoot: typeof args.projectRoot === 'string' ? args.projectRoot : this.projectRoot,
         });
 

@@ -580,4 +580,139 @@ describe('Client Execution Layer & Query Surface Tests', () => {
     });
     assert.equal(compact.semantic_context, undefined);
   });
+
+  test('Task 3.3: compact protocol + pagination flags gate sections independently', () => {
+    const makeNode = (
+      id: string,
+      name: string,
+      opts: { isEntryPoint: boolean; entryPointType?: string; outgoingEdges?: SuperNode['substrate']['outgoingEdges']; semantic?: SuperNode['semantic'] }
+    ): SuperNode => ({
+      id,
+      urn: `urn:test:${name}`,
+      kind: 'function',
+      name,
+      qualifiedName: name,
+      repoId: 'app',
+      versioning: {
+        lamportClock: 1,
+        vectorClock: { daemon: 1 },
+        layerEpochs: { substrateEpoch: 1, semanticEpoch: 0, processEpoch: 0 },
+        contentSha256: '0'.repeat(64),
+        astStructuralHash: '0'.repeat(64),
+        semanticValidityHash: '0'.repeat(64),
+      },
+      substrate: {
+        sourceLocation: { filePath: `src/${name}.ts`, startLine: 1, startColumn: 0, endLine: 10, endColumn: 1 },
+        language: 'typescript',
+        symbolSignature: `export function ${name}()`,
+        outgoingEdges: opts.outgoingEdges ?? [],
+        astEpochTimestamp: new Date().toISOString(),
+      },
+      semantic: opts.semantic ?? { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+      processFlow: {
+        isEntryPoint: opts.isEntryPoint,
+        entryPointScore: opts.isEntryPoint ? 0.95 : 0.1,
+        entryPointType: opts.entryPointType,
+        processFlowSequences: [],
+        crossRepoContracts: [],
+      },
+    });
+
+    const entryId = 'sg://app/src/c33entry.ts#c33Entry';
+    const midId = 'sg://app/src/c33mid.ts#c33Mid';
+    const leafId = 'sg://app/src/c33leaf.ts#c33Leaf';
+    const entryNode = makeNode('sg://app/src/c33entry.ts#c33Entry', 'c33Entry', {
+      isEntryPoint: true,
+      entryPointType: 'HTTP_ROUTE',
+      outgoingEdges: [
+        { targetId: midId, kind: 'CALLS', confidence: 'EXTRACTED', confidenceScore: 1.0, provenance: 'tree-sitter-ast' },
+        {
+          targetId: entryId,
+          kind: 'HANDLES_ROUTE',
+          confidence: 'EXTRACTED',
+          confidenceScore: 0.95,
+          provenance: 'native-synthesizer',
+          dispatchMechanism: 'HTTP GET /c33entry',
+        },
+      ],
+    });
+    const midNode = makeNode('sg://app/src/c33mid.ts#c33Mid', 'c33Mid', {
+      isEntryPoint: false,
+      outgoingEdges: [
+        { targetId: leafId, kind: 'CALLS', confidence: 'EXTRACTED', confidenceScore: 1.0, provenance: 'tree-sitter-ast' },
+        {
+          targetId: leafId,
+          kind: 'DYNAMIC_DISPATCH:EVENT',
+          confidence: 'EXTRACTED',
+          confidenceScore: 0.9,
+          provenance: 'native-synthesizer',
+        },
+      ],
+      semantic: {
+        validityStatus: 'VALID',
+        conceptualSummary: 'Compact-protocol mid node.',
+        adrReferences: [{ adrId: 'ADR-033', title: 'Compact Protocol', status: 'ACCEPTED' }],
+        communityClusters: [],
+        semanticEmbeddings: [],
+      },
+    });
+    const leafNode = makeNode('sg://app/src/c33leaf.ts#c33Leaf', 'c33Leaf', { isEntryPoint: false });
+
+    const isoStore = new ClientGraphStore();
+    const isoReconciler = new DualBufferReconciler(isoStore);
+    isoReconciler.applySubstrateDelta({
+      protocolVersion: 1,
+      epochId: 1,
+      transactionId: 'tx-3-3-red',
+      vectorClock: { daemon: 1 },
+      timestampMs: Date.now(),
+      projectRoot: '/test',
+      reconcileMode: 'delta',
+      mutations: [
+        { type: 'NodeUpsert', node: entryNode },
+        { type: 'NodeUpsert', node: midNode },
+        { type: 'NodeUpsert', node: leafNode },
+      ],
+    });
+    const isoExplore = new SuperGraphExploreEngine(isoStore);
+
+    // Baseline: all sections present + pagination always.
+    const full = isoExplore.explore({ query: 'c33Mid', symbol_anchor: midId });
+    assert.ok(full.execution_flows.call_chains.length >= 1, 'baseline flows present');
+    assert.ok(full.dynamic_dispatches.length >= 1, 'baseline dispatches present');
+    assert.ok(full.blast_radius, 'baseline blast present');
+    assert.ok(full.served_spans.length >= 1, 'baseline spans present');
+    assert.ok(full.semantic_context?.length === 1, 'baseline semantic present');
+    assert.equal(typeof full.total_matches, 'number');
+    assert.equal(typeof full.next_offset, 'number');
+
+    // include_flows:false gates flows only.
+    const noFlows = isoExplore.explore({ query: 'c33Mid', symbol_anchor: midId, include_flows: false });
+    assert.deepEqual(noFlows.execution_flows, { entry_points: [], call_chains: [] });
+    assert.ok(noFlows.dynamic_dispatches.length >= 1, 'dispatches survive include_flows:false');
+    assert.equal(typeof noFlows.total_matches, 'number');
+    assert.equal(typeof noFlows.next_offset, 'number');
+
+    // include_dispatches:false gates dispatches only.
+    const noDispatch = isoExplore.explore({ query: 'c33Mid', symbol_anchor: midId, include_dispatches: false });
+    assert.deepEqual(noDispatch.dynamic_dispatches, []);
+    assert.ok(noDispatch.execution_flows.call_chains.length >= 1, 'flows survive include_dispatches:false');
+
+    // compact:true returns symbols + summary + pagination only (small JSON).
+    const compact33 = isoExplore.explore({ query: 'c33Mid', symbol_anchor: midId, compact: true });
+    assert.ok(compact33.symbols.length >= 1, 'compact keeps symbols');
+    assert.ok(compact33.query_summary, 'compact keeps query_summary');
+    assert.equal(typeof compact33.total_matches, 'number');
+    assert.equal(typeof compact33.next_offset, 'number');
+    assert.deepEqual(compact33.execution_flows, { entry_points: [], call_chains: [] });
+    assert.deepEqual(compact33.dynamic_dispatches, []);
+    assert.deepEqual(compact33.served_spans, []);
+    assert.equal(compact33.blast_radius, undefined);
+    assert.equal(compact33.semantic_context, undefined);
+    const compactJson = JSON.stringify(compact33);
+    const fullJson = JSON.stringify(full);
+    assert.ok(compactJson.length < fullJson.length, 'compact smaller than full');
+    // ~500 tokens ≈ 2000 chars; compact must stay well under.
+    assert.ok(compactJson.length < 2000, `compact JSON small (got ${compactJson.length} chars)`);
+  });
 });
