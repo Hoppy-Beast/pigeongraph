@@ -663,17 +663,90 @@ export class AstExtractor {
     lines: string[],
     fileNode: SuperNode,
     nodes: SuperNode[],
-    _edges: Array<{ sourceId: string; targetId: string; edge: SubstrateEdge }>
+    edges: Array<{ sourceId: string; targetId: string; edge: SubstrateEdge }>
   ): void {
     const { repoId, filePath, epoch, lamportClock } = options;
     const defRegex = /^\s*(?:async\s+)?def\s+([a-zA-Z0-9_]+)\s*\(/i;
     const classRegex = /^\s*class\s+([a-zA-Z0-9_]+)(?:\(([^)]*)\))?:/i;
+
+    interface PendingRoute {
+      method: string;
+      path: string;
+      decoratorLine: number;
+      dispatch: string;
+    }
+    const pendingRoutes: PendingRoute[] = [];
+    const pendingMiddlewares: Array<{ mwName: string; line: number }> = [];
 
     let currentClass: string | null = null;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNum = i + 1;
+      const trimmed = line.trim();
+
+      // Route decorator detection (multiline aware, max 5 lines for balanced parens)
+      if (trimmed.startsWith('@')) {
+        let decoText = line;
+        let openCount = (decoText.match(/\(/g) ?? []).length;
+        let closeCount = (decoText.match(/\)/g) ?? []).length;
+        let k = i;
+        while (openCount > closeCount && k + 1 < lines.length && k - i < 5) {
+          k++;
+          decoText += '\n' + lines[k];
+          openCount = (decoText.match(/\(/g) ?? []).length;
+          closeCount = (decoText.match(/\)/g) ?? []).length;
+        }
+        const methodMatch = decoText.match(
+          /@([A-Za-z0-9_\.]+)\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]/i
+        );
+        if (methodMatch) {
+          const prefix = methodMatch[1];
+          const segments = prefix.split('.');
+          const isRoutePrefix = segments.some(
+            (s) => s === 'app' || s === 'router' || s === 'api_router' || s === 'blueprint'
+          );
+          if (isRoutePrefix) {
+            const method = methodMatch[2].toUpperCase();
+            const path = methodMatch[3];
+            pendingRoutes.push({ method, path, decoratorLine: lineNum, dispatch: `HTTP ${method} ${path}` });
+          }
+        } else {
+          const flaskMatch = decoText.match(/@([A-Za-z0-9_\.]+)\.route\s*\(\s*['"]([^'"]+)['"]/i);
+          if (flaskMatch) {
+            const path = flaskMatch[2];
+            const methodsMatch = decoText.match(/methods\s*=\s*\[([^\]]+)\]/i);
+            let methods: string[] = ['GET'];
+            if (methodsMatch) {
+              const found = methodsMatch[1].match(/['"]?(get|post|put|delete|patch)['"]?/gi);
+              if (found && found.length > 0) {
+                methods = found.map((s) => s.replace(/['"\s]/g, '').toUpperCase());
+              }
+            }
+            for (const m of methods) {
+              pendingRoutes.push({ method: m, path, decoratorLine: lineNum, dispatch: `HTTP ${m} ${path}` });
+            }
+          }
+        }
+      }
+
+      // add_middleware detection (multiline aware, max 3 lines for balanced parens)
+      if (line.includes('add_middleware')) {
+        let mwText = line;
+        let mwOpen = (mwText.match(/\(/g) ?? []).length;
+        let mwClose = (mwText.match(/\)/g) ?? []).length;
+        let kk = i;
+        while (mwOpen > mwClose && kk + 1 < lines.length && kk - i < 3) {
+          kk++;
+          mwText += '\n' + lines[kk];
+          mwOpen = (mwText.match(/\(/g) ?? []).length;
+          mwClose = (mwText.match(/\)/g) ?? []).length;
+        }
+        const mwMatch = mwText.match(/\.add_middleware\s*\(\s*([A-Za-z0-9_]+)/);
+        if (mwMatch) {
+          pendingMiddlewares.push({ mwName: mwMatch[1], line: lineNum });
+        }
+      }
 
       const classMatch = line.match(classRegex);
       if (classMatch) {
@@ -781,6 +854,126 @@ export class AstExtractor {
         };
         fileNode.substrate.outgoingEdges.push({ targetId: fnNodeId, kind: 'CONTAINS', confidence: 'EXTRACTED', confidenceScore: 1.0, provenance: 'tree-sitter-ast' });
         nodes.push(fnNode);
+
+        // Attach pending decorator routes within 15-line window (skip intermediate decorators)
+        const validRoutes = pendingRoutes.filter(
+          (p) => lineNum - p.decoratorLine >= 0 && lineNum - p.decoratorLine <= 15
+        );
+        if (validRoutes.length > 0) {
+          for (const pr of validRoutes) {
+            const routeEdge: SubstrateEdge = {
+              targetId: fnNodeId,
+              kind: 'HANDLES_ROUTE',
+              confidence: 'EXTRACTED',
+              confidenceScore: 0.95,
+              provenance: 'tree-sitter-ast',
+              dispatchMechanism: pr.dispatch,
+            };
+            fileNode.substrate.outgoingEdges.push(routeEdge);
+            edges.push({ sourceId: fileNode.id, targetId: fnNodeId, edge: routeEdge });
+          }
+          fnNode.processFlow.isEntryPoint = true;
+          fnNode.processFlow.entryPointScore = 0.95;
+          fnNode.processFlow.entryPointType = 'HTTP_ROUTE';
+          for (const pr of validRoutes) {
+            const idx = pendingRoutes.indexOf(pr);
+            if (idx !== -1) pendingRoutes.splice(idx, 1);
+          }
+        }
+        // Evict stale pending routes older than 15 lines
+        for (let s = pendingRoutes.length - 1; s >= 0; s--) {
+          if (lineNum - pendingRoutes[s].decoratorLine > 15) pendingRoutes.splice(s, 1);
+        }
+      }
+    }
+
+    // Link add_middleware targets defined in the same file
+    for (const pm of pendingMiddlewares) {
+      const target = nodes.find(
+        (n) =>
+          n.name === pm.mwName &&
+          (n.kind === 'class' || n.kind === 'function' || n.kind === 'method')
+      );
+      if (!target) continue;
+      const alreadyHas = fileNode.substrate.outgoingEdges.some(
+        (e) => e.targetId === target.id && e.kind === 'HANDLES_ROUTE'
+      );
+      if (alreadyHas) continue;
+      const mwEdge: SubstrateEdge = {
+        targetId: target.id,
+        kind: 'HANDLES_ROUTE',
+        confidence: 'EXTRACTED',
+        confidenceScore: 0.95,
+        provenance: 'tree-sitter-ast',
+        dispatchMechanism: `MIDDLEWARE ${pm.mwName}`,
+      };
+      fileNode.substrate.outgoingEdges.push(mwEdge);
+      edges.push({ sourceId: fileNode.id, targetId: target.id, edge: mwEdge });
+      target.processFlow.isEntryPoint = true;
+      target.processFlow.entryPointScore = 0.95;
+      target.processFlow.entryPointType = 'HTTP_ROUTE';
+    }
+
+    // Second pass: Python CALLS resolution (same-file scope)
+    const skipKeywords = new Set([
+      'def',
+      'class',
+      'if',
+      'elif',
+      'else',
+      'for',
+      'while',
+      'return',
+      'import',
+      'from',
+      'print',
+      'len',
+      'range',
+      'pass',
+      'raise',
+      'assert',
+      'with',
+      'except',
+      'try',
+      'finally',
+      'yield',
+      'await',
+      'async',
+      'lambda',
+    ]);
+    const funcMethodNodes = nodes.filter((n) => n.kind === 'function' || n.kind === 'method');
+    for (const callerNode of funcMethodNodes) {
+      const startLine = callerNode.substrate.sourceLocation.startLine;
+      const endLine = callerNode.substrate.sourceLocation.endLine;
+      const bodyLines = lines.slice(Math.max(0, startLine - 1), Math.min(lines.length, endLine));
+      const bodyText = bodyLines.join('\n');
+      const callSiteRegex = /\b([A-Za-z_][\w]*)\s*\(/g;
+      let callMatch: RegExpExecArray | null;
+      while ((callMatch = callSiteRegex.exec(bodyText)) !== null) {
+        const calledName = callMatch[1];
+        if (skipKeywords.has(calledName)) continue;
+        if (calledName === callerNode.name) continue;
+        const callee = funcMethodNodes.find(
+          (n) =>
+            n.id !== callerNode.id &&
+            (n.name === calledName ||
+              n.qualifiedName === calledName ||
+              n.qualifiedName.endsWith(`.${calledName}`))
+        );
+        if (!callee) continue;
+        const alreadyHas = callerNode.substrate.outgoingEdges.some(
+          (e) => e.targetId === callee.id && e.kind === 'CALLS'
+        );
+        if (alreadyHas) continue;
+        const callEdge: SubstrateEdge = {
+          targetId: callee.id,
+          kind: 'CALLS',
+          confidence: 'EXTRACTED',
+          confidenceScore: 1.0,
+          provenance: 'tree-sitter-ast',
+        };
+        callerNode.substrate.outgoingEdges.push(callEdge);
+        edges.push({ sourceId: callerNode.id, targetId: callee.id, edge: callEdge });
       }
     }
   }

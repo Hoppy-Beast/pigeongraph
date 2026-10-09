@@ -664,4 +664,79 @@ def get_exam():
     const alias = nodes.find((n) => n.kind === 'type_alias' && n.name === 'ID');
     assert.ok(alias, 'type alias ID must be indexed');
   });
+
+  test('AstExtractor links Python decorator routes and resolves intra-file CALLS', () => {
+    const pyCode = `
+from fastapi import FastAPI
+app = FastAPI()
+
+@app.get('/x')
+def handler():
+    return {"ok": True}
+
+def callee():
+    return 1
+
+def caller():
+    return callee()
+
+@router.post('/submit')
+def submit_handler():
+    return callee()
+
+@app.get(
+    "/multi"
+)
+def multi_handler():
+    pass
+    `;
+
+    const { nodes, edges } = extractor.parseFile({
+      repoId: 'test-repo',
+      filePath: 'api/main.py',
+      content: pyCode,
+      epoch: 1,
+      lamportClock: 1,
+    });
+
+    const fileNode = nodes.find((n) => n.kind === 'file');
+    assert.ok(fileNode, 'file node must exist');
+
+    const handler = nodes.find((n) => n.name === 'handler');
+    assert.ok(handler, 'handler must be parsed');
+    const handlerRoute = edges.find(
+      (e) => e.edge.kind === 'HANDLES_ROUTE' && e.targetId === handler?.id
+    );
+    assert.ok(handlerRoute, 'file must have HANDLES_ROUTE edge to handler');
+    assert.equal(handlerRoute?.edge.dispatchMechanism, 'HTTP GET /x');
+    assert.equal(handler?.processFlow.isEntryPoint, true);
+    assert.equal(handler?.processFlow.entryPointScore, 0.95);
+    assert.equal(handler?.processFlow.entryPointType, 'HTTP_ROUTE');
+
+    const submitHandler = nodes.find((n) => n.name === 'submit_handler');
+    assert.ok(submitHandler, 'submit_handler must be parsed');
+    const submitRoute = edges.find(
+      (e) => e.edge.kind === 'HANDLES_ROUTE' && e.targetId === submitHandler?.id
+    );
+    assert.ok(submitRoute, 'file must have HANDLES_ROUTE edge to submit_handler');
+    assert.equal(submitRoute?.edge.dispatchMechanism, 'HTTP POST /submit');
+
+    const multiHandler = nodes.find((n) => n.name === 'multi_handler');
+    assert.ok(multiHandler, 'multi_handler must be parsed');
+    const multiRoute = edges.find(
+      (e) => e.edge.kind === 'HANDLES_ROUTE' && e.targetId === multiHandler?.id
+    );
+    assert.ok(multiRoute, 'multiline decorator must yield HANDLES_ROUTE');
+    assert.equal(multiRoute?.edge.dispatchMechanism, 'HTTP GET /multi');
+
+    const caller = nodes.find((n) => n.name === 'caller');
+    const callee = nodes.find((n) => n.name === 'callee');
+    assert.ok(caller, 'caller must be parsed');
+    assert.ok(callee, 'callee must be parsed');
+    const callEdges = edges.filter((e) => e.edge.kind === 'CALLS' && e.sourceId === caller?.id);
+    assert.ok(
+      callEdges.some((e) => e.targetId === callee?.id),
+      'caller must have CALLS edge to same-file callee'
+    );
+  });
 });
