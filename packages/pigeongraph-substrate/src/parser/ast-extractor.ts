@@ -998,9 +998,313 @@ export class AstExtractor {
     lines: string[],
     fileNode: SuperNode,
     nodes: SuperNode[],
-    _edges: Array<{ sourceId: string; targetId: string; edge: SubstrateEdge }>
+    edges: Array<{ sourceId: string; targetId: string; edge: SubstrateEdge }>
   ): void {
     const { repoId, filePath, epoch, lamportClock } = options;
+    const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+    const fileLang = fileNode.substrate.language ?? '';
+    const lang =
+      fileLang === 'java' || fileLang === 'c' || fileLang === 'cpp'
+        ? fileLang
+        : ext === 'java'
+          ? 'java'
+          : ext === 'c' || ext === 'h'
+            ? 'c'
+            : ext === 'cpp' || ext === 'hpp' || ext === 'cc' || ext === 'cxx'
+              ? 'cpp'
+              : 'generic';
+
+    const scanEndLine = (startIdx: number): number => {
+      let depth = 0;
+      let opened = false;
+      const max = Math.min(lines.length, startIdx + 40);
+      for (let j = startIdx; j < max; j++) {
+        for (const ch of lines[j]) {
+          if (ch === '{') { depth++; opened = true; }
+          if (ch === '}') { depth--; }
+        }
+        if (opened && depth <= 0) return j + 1;
+      }
+      return Math.min(startIdx + 9, lines.length);
+    };
+
+    const pushContains = (targetId: string, parent: SuperNode): void => {
+      const edge: SubstrateEdge = {
+        targetId,
+        kind: 'CONTAINS',
+        confidence: 'EXTRACTED',
+        confidenceScore: 1.0,
+        provenance: 'heuristic-resolver',
+      };
+      parent.substrate.outgoingEdges.push(edge);
+      edges.push({ sourceId: parent.id, targetId, edge });
+    };
+
+    if (lang === 'java') {
+      const javaImportRegex = /^\s*import\s+(?:static\s+)?([\w.]+(?:\.\*)?)\s*;/;
+      const javaClassRegex = /^\s*(?:(public|private|protected)\s+)?(?:static\s+)?(?:final\s+)?(?:abstract\s+)?(class|interface|enum)\s+([A-Za-z0-9_]+)/;
+      const javaMethodRegex = /^\s*(?:(public|private|protected)\s+)?(?:static\s+)?(?:final\s+)?(?:abstract\s+)?(?:synchronized\s+)?(?:native\s+)?(?:([\w<>\[\].,?@ ]+)\s+)?([A-Za-z0-9_]+)\s*\(([^)]*)\)\s*(?:throws\s+[\w.,\s]+)?\s*([\{;]?)\s*$/;
+      const javaSkip = new Set([
+        'if', 'for', 'while', 'switch', 'catch', 'return', 'new', 'assert',
+        'throw', 'case', 'break', 'continue', 'do', 'else', 'try', 'finally',
+        'this', 'super', 'import', 'package', 'typeof', 'instanceof',
+      ]);
+      const classStack: Array<{ node: SuperNode; braceDepth: number; kind: string }> = [];
+      let braceDepth = 0;
+
+      const parseJavaParams = (raw: string): Array<{ name: string; type: string }> => {
+        if (!raw.trim()) return [];
+        const out: Array<{ name: string; type: string }> = [];
+        for (const part of raw.split(',')) {
+          let p = part.trim();
+          if (!p) continue;
+          p = p.replace(/@\w+(\([^)]*\))?\s*/g, '').replace(/^final\s+/, '').trim();
+          if (!p) continue;
+          const noDefault = p.split('=')[0].trim();
+          const tokens = noDefault.split(/\s+/);
+          const rawName = tokens[tokens.length - 1].replace(/^\.+/, '').replace(/\.\.\.$/, '').replace(/\[\]$/, '');
+          if (!rawName || !/^[A-Za-z0-9_]+$/.test(rawName)) continue;
+          const type = tokens.length > 1 ? tokens.slice(0, -1).join(' ') : 'any';
+          out.push({ name: rawName, type });
+        }
+        return out;
+      };
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        const lineNum = i + 1;
+
+        for (const ch of line) {
+          if (ch === '{') braceDepth++;
+          if (ch === '}') braceDepth--;
+        }
+        while (classStack.length > 0 && braceDepth < classStack[classStack.length - 1].braceDepth) {
+          classStack.pop();
+        }
+
+        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) continue;
+        if (trimmed.startsWith('@') || trimmed.startsWith('package ')) continue;
+
+        const importMatch = line.match(javaImportRegex);
+        if (importMatch) {
+          const importPath = importMatch[1];
+          const targetId = `sg://${repoId}/${importPath}`;
+          const edge: SubstrateEdge = {
+            targetId,
+            kind: 'IMPORTS',
+            confidence: 'EXTRACTED',
+            confidenceScore: 1.0,
+            provenance: 'heuristic-resolver',
+            location: { filePath, startLine: lineNum, startColumn: line.indexOf(importPath), endLine: lineNum, endColumn: line.indexOf(importPath) + importPath.length },
+          };
+          fileNode.substrate.outgoingEdges.push(edge);
+          edges.push({ sourceId: fileNode.id, targetId, edge });
+          continue;
+        }
+
+        const classMatch = line.match(javaClassRegex);
+        if (classMatch) {
+          const visibilityRaw = classMatch[1];
+          const kind = classMatch[2] as 'class' | 'interface' | 'enum';
+          const typeName = classMatch[3];
+          const nodeId = `sg://${repoId}/${filePath}#${typeName}`;
+          const typeNode: SuperNode = {
+            id: nodeId,
+            urn: `urn:supergraph:${repoId}:${filePath}#${typeName}`,
+            kind,
+            name: typeName,
+            qualifiedName: typeName,
+            repoId,
+            versioning: {
+              lamportClock,
+              vectorClock: { substrate: lamportClock },
+              layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
+              contentSha256: computeContentHash(line),
+              astStructuralHash: computeAstStructuralHash(line),
+              semanticValidityHash: computeSemanticValidityHash({ name: typeName, kind }),
+              lastModifiedTimestampMs: Date.now(),
+            },
+            substrate: {
+              sourceLocation: { filePath, startLine: lineNum, startColumn: line.indexOf(typeName), endLine: lineNum + 10, endColumn: 1 },
+              language: 'java',
+              symbolSignature: trimmed,
+              visibility: visibilityRaw === 'public' ? 'public' : visibilityRaw === 'private' ? 'private' : visibilityRaw === 'protected' ? 'protected' : 'package-private',
+              outgoingEdges: [],
+              astEpochTimestamp: new Date().toISOString(),
+            },
+            semantic: { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+            processFlow: { isEntryPoint: false, entryPointScore: 0, processFlowSequences: [], crossRepoContracts: [] },
+          };
+          pushContains(nodeId, fileNode);
+          nodes.push(typeNode);
+          classStack.push({ node: typeNode, braceDepth, kind });
+          continue;
+        }
+
+        if (!trimmed.includes('(') || !trimmed.includes(')')) continue;
+        const methodMatch = line.match(javaMethodRegex);
+        if (!methodMatch) continue;
+        const parenIdx = trimmed.indexOf('(');
+        const beforeParen = trimmed.substring(0, parenIdx);
+        if (beforeParen.includes('.') || beforeParen.includes('=') || beforeParen.includes('"') || beforeParen.includes("'")) continue;
+        const visibilityRaw = methodMatch[1];
+        const returnTypeRaw = methodMatch[2]?.trim();
+        const methodName = methodMatch[3];
+        const paramsRaw = methodMatch[4] ?? '';
+        const trailer = methodMatch[5] ?? '';
+        if (!methodName || !/^[A-Za-z0-9_]+$/.test(methodName) || javaSkip.has(methodName)) continue;
+        if (returnTypeRaw) {
+          const firstWord = returnTypeRaw.split(/\s+/)[0].replace(/[<>,?\[\].@]/g, '');
+          if (javaSkip.has(firstWord)) continue;
+          if (['class', 'interface', 'enum'].includes(firstWord)) continue;
+        }
+        const parent = classStack.length > 0 ? classStack[classStack.length - 1] : null;
+        if (trailer === ';') {
+          const isAbstract = /\babstract\b/.test(beforeParen) || /\babstract\b/.test(line);
+          const inInterface = parent?.kind === 'interface';
+          if (!isAbstract && !inInterface) continue;
+        } else if (trailer === '') {
+          let k = i + 1;
+          while (k < lines.length && !lines[k].trim()) k++;
+          if (k >= lines.length || !lines[k].trim().startsWith('{')) continue;
+        }
+        const tokens = beforeParen.trim().split(/\s+/);
+        const isStatic = tokens.includes('static');
+        const returnType = returnTypeRaw && returnTypeRaw.length > 0 ? returnTypeRaw.replace(/\s+/g, ' ') : undefined;
+        const qname = parent ? `${parent.node.name}.${methodName}` : methodName;
+        const nodeId = `sg://${repoId}/${filePath}#${qname}`;
+        if (nodes.some((n) => n.id === nodeId)) continue;
+        const endLine = scanEndLine(i);
+        const methodNode: SuperNode = {
+          id: nodeId,
+          urn: `urn:supergraph:${repoId}:${filePath}#${qname}`,
+          kind: 'method',
+          name: methodName,
+          qualifiedName: qname,
+          repoId,
+          versioning: {
+            lamportClock,
+            vectorClock: { substrate: lamportClock },
+            layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
+            contentSha256: computeContentHash(line),
+            astStructuralHash: computeAstStructuralHash(line),
+            semanticValidityHash: computeSemanticValidityHash({ name: methodName, kind: 'method', signature: trimmed, returnType }),
+            lastModifiedTimestampMs: Date.now(),
+          },
+          substrate: {
+            sourceLocation: { filePath, startLine: lineNum, startColumn: line.indexOf(methodName), endLine, endColumn: 1 },
+            language: 'java',
+            symbolSignature: trimmed,
+            visibility: visibilityRaw === 'public' ? 'public' : visibilityRaw === 'private' ? 'private' : visibilityRaw === 'protected' ? 'protected' : 'package-private',
+            modifiers: isStatic ? ['static'] : [],
+            returnType,
+            parameters: parseJavaParams(paramsRaw),
+            outgoingEdges: [],
+            astEpochTimestamp: new Date().toISOString(),
+          },
+          semantic: { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+          processFlow: { isEntryPoint: false, entryPointScore: 0.2, processFlowSequences: [], crossRepoContracts: [] },
+        };
+        pushContains(nodeId, fileNode);
+        if (parent) pushContains(nodeId, parent.node);
+        nodes.push(methodNode);
+      }
+      return;
+    }
+
+    if (lang === 'c' || lang === 'cpp') {
+      const cFuncRegex = /^\s*([A-Za-z_][\w\s\*&:<>]*?)\s+([\*&]*\s*(?:[A-Za-z_][\w:]*|~[A-Za-z_]\w*))\s*\(([^)]*)\)\s*(?:const\s*)?(?:noexcept(?:\s*\([^)]*\))?\s*)?(?:override\s*)?(?:final\s*)?([\{;]?)\s*$/;
+      const cSkip = new Set([
+        'if', 'for', 'while', 'switch', 'catch', 'return', 'sizeof', 'typedef',
+        'using', 'namespace', 'template', 'else', 'do', 'case', 'break',
+        'continue', 'goto', 'static_assert', 'alignas', 'decltype', 'requires',
+      ]);
+      const cDeclSkip = new Set(['class', 'struct', 'enum', 'union', 'namespace', 'using', 'typedef', 'template', 'typename']);
+
+      const parseCParams = (raw: string): Array<{ name: string; type: string }> => {
+        if (!raw.trim() || raw.trim() === 'void') return [];
+        const out: Array<{ name: string; type: string }> = [];
+        for (const part of raw.split(',')) {
+          let p = part.trim();
+          if (!p || p === 'void' || p === '...') continue;
+          p = p.split('=')[0].trim();
+          const tokens = p.split(/\s+/);
+          const lastRaw = tokens[tokens.length - 1].replace(/^[\*&]+/, '').replace(/\[.*\]$/, '');
+          if (!lastRaw || !/^[A-Za-z_]\w*$/.test(lastRaw) || cSkip.has(lastRaw)) continue;
+          const type = tokens.length > 1 ? tokens.slice(0, -1).join(' ').replace(/\s+/g, ' ') : 'any';
+          out.push({ name: lastRaw, type });
+        }
+        return out;
+      };
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        const lineNum = i + 1;
+        if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) continue;
+        if (trimmed.startsWith('}') || trimmed.startsWith(')')) continue;
+        if (trimmed.includes('typedef ')) continue;
+        if (!trimmed.includes('(') || !trimmed.includes(')')) continue;
+        const m = line.match(cFuncRegex);
+        if (!m) continue;
+        const returnRaw = m[1].replace(/\s+/g, ' ').trim();
+        const nameRaw = m[2].replace(/^[\*&\\s]+/, '').trim();
+        const paramsRaw = m[3] ?? '';
+        const trailer = m[4] ?? '';
+        const parenIdx = trimmed.indexOf('(');
+        const beforeParen = trimmed.substring(0, parenIdx);
+        if (beforeParen.includes('.') || beforeParen.includes('=') || beforeParen.includes('"') || beforeParen.includes("'")) continue;
+        const firstWord = returnRaw.split(/\s+/)[0].replace(/[<>:&\*]/g, '');
+        if (cSkip.has(firstWord) || cDeclSkip.has(firstWord)) continue;
+        if (!nameRaw || !/^[A-Za-z_][\w:]*$/.test(nameRaw) && !/^~[A-Za-z_]\w*$/.test(nameRaw)) continue;
+        const shortName = nameRaw.includes('::') ? nameRaw.split('::').pop() as string : nameRaw;
+        if (cSkip.has(shortName) || cDeclSkip.has(shortName)) continue;
+        if (trailer === ';') continue;
+        if (trailer === '') {
+          let k = i + 1;
+          while (k < lines.length && !lines[k].trim()) k++;
+          if (k >= lines.length || !lines[k].trim().startsWith('{')) continue;
+        }
+        const qname = nameRaw;
+        const nodeId = `sg://${repoId}/${filePath}#${qname}`;
+        if (nodes.some((n) => n.id === nodeId)) continue;
+        const endLine = scanEndLine(i);
+        const fnNode: SuperNode = {
+          id: nodeId,
+          urn: `urn:supergraph:${repoId}:${filePath}#${qname}`,
+          kind: 'function',
+          name: shortName,
+          qualifiedName: qname,
+          repoId,
+          versioning: {
+            lamportClock,
+            vectorClock: { substrate: lamportClock },
+            layerEpochs: { substrateEpoch: epoch, semanticEpoch: 0, processEpoch: 0 },
+            contentSha256: computeContentHash(line),
+            astStructuralHash: computeAstStructuralHash(line),
+            semanticValidityHash: computeSemanticValidityHash({ name: shortName, kind: 'function', signature: trimmed, returnType: returnRaw }),
+            lastModifiedTimestampMs: Date.now(),
+          },
+          substrate: {
+            sourceLocation: { filePath, startLine: lineNum, startColumn: line.indexOf(shortName), endLine, endColumn: 1 },
+            language: lang,
+            symbolSignature: trimmed,
+            visibility: trimmed.startsWith('static ') ? 'internal' : 'public',
+            returnType: returnRaw,
+            parameters: parseCParams(paramsRaw),
+            outgoingEdges: [],
+            astEpochTimestamp: new Date().toISOString(),
+          },
+          semantic: { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+          processFlow: { isEntryPoint: false, entryPointScore: 0.5, processFlowSequences: [], crossRepoContracts: [] },
+        };
+        pushContains(nodeId, fileNode);
+        nodes.push(fnNode);
+      }
+      return;
+    }
+
     const fnRegex = /(?:fn|func|function|def)\s+(?:\([^)]+\)\s+)?([a-zA-Z0-9_]+)\s*\(/i;
 
     for (let i = 0; i < lines.length; i++) {

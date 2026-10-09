@@ -964,4 +964,93 @@ def single_quote_py():
       "Python ''' docstring must be attached"
     );
   });
+
+  test('AstExtractor parses Java classes/methods/imports and C functions via generic fallback', () => {
+    const javaCode = `
+package com.example;
+import java.util.List;
+import com.example.util.Helper;
+public class Calculator {
+  private int counter;
+  public int add(int a, int b) {
+    return a + b;
+  }
+  protected static String describe(String name) {
+    return name;
+  }
+}
+    `;
+
+    const { nodes: jNodes, edges: jEdges } = extractor.parseFile({
+      repoId: 'test-repo',
+      filePath: 'src/Calculator.java',
+      content: javaCode,
+      epoch: 1,
+      lamportClock: 1,
+    });
+
+    const jClass = jNodes.find((n) => n.kind === 'class' && n.name === 'Calculator');
+    assert.ok(jClass, 'Java class Calculator must be indexed');
+
+    const addMethod = jNodes.find((n) => n.kind === 'method' && n.name === 'add');
+    assert.ok(addMethod, 'Java method add must be indexed');
+    assert.equal(addMethod?.substrate.visibility, 'public');
+
+    const describeMethod = jNodes.find((n) => n.kind === 'method' && n.name === 'describe');
+    assert.ok(describeMethod, 'Java method describe must be indexed');
+    assert.equal(describeMethod?.substrate.visibility, 'protected');
+    assert.ok(
+      describeMethod?.substrate.modifiers?.includes('static'),
+      'describe must carry static modifier'
+    );
+
+    const jImportEdges = jEdges.filter((e) => e.edge.kind === 'IMPORTS');
+    assert.ok(jImportEdges.length >= 2, `Expected >=2 Java IMPORTS edges, got ${jImportEdges.length}`);
+    assert.ok(
+      jImportEdges.every((e) => e.edge.provenance === 'heuristic-resolver'),
+      'Java IMPORTS edges must use heuristic-resolver provenance'
+    );
+
+    const containsClass = jEdges.some(
+      (e) => e.edge.kind === 'CONTAINS' && e.targetId === jClass?.id
+    );
+    assert.ok(containsClass, 'File must have CONTAINS edge to Java class');
+
+    const cCode = `
+#include <stdio.h>
+int add(int a, int b) {
+  return a + b;
+}
+static void helper(void)
+{
+}
+int prototype(int x);
+    `;
+
+    const { nodes: cNodes, edges: cEdges } = extractor.parseFile({
+      repoId: 'test-repo',
+      filePath: 'src/add.c',
+      content: cCode,
+      epoch: 1,
+      lamportClock: 1,
+    });
+
+    const addFn = cNodes.find((n) => n.kind === 'function' && n.name === 'add');
+    assert.ok(addFn, 'C function add must be indexed');
+    assert.ok(
+      addFn?.substrate.symbolSignature?.includes('add'),
+      'C function signature must be captured'
+    );
+
+    const helperFn = cNodes.find((n) => n.kind === 'function' && n.name === 'helper');
+    assert.ok(helperFn, 'C function with brace on next line must be indexed');
+
+    const proto = cNodes.find((n) => n.name === 'prototype');
+    assert.equal(proto, undefined, 'C prototypes ending with ; must be skipped');
+
+    const containsAdd = cEdges.some(
+      (e) => e.edge.kind === 'CONTAINS' && e.targetId === addFn?.id
+    );
+    assert.ok(containsAdd, 'File must have CONTAINS edge to C function');
+  });
 });
