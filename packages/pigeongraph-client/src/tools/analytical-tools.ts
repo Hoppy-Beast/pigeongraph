@@ -1,6 +1,7 @@
 import type { SuperNode } from '@pigeongraph/schema';
 import { ClientGraphStore } from '../store/client-graph.js';
 import { computeRisk } from './risk.js';
+import { resolveSymbolExactOrFuzzy } from './resolver.js';
 
 export interface ImpactQueryInput {
   target_symbol: string;
@@ -122,13 +123,7 @@ export class AnalyticalToolsEngine {
   }
 
   private resolveSymbol(symbolOrId: string): SuperNode | null {
-    const direct = this.store.getNode(symbolOrId);
-    if (direct) return direct;
-
-    const all = this.store.getAllNodes();
-    const match = all.find(
-      (n) => n.name === symbolOrId || n.qualifiedName === symbolOrId || n.id.endsWith(`#${symbolOrId}`)
-    );
-    return match ?? null;
+    const resolved = resolveSymbolExactOrFuzzy(symbolOrId, this.store.getAllNodes(), this.store);
+    return resolved?.node ?? null;
   }
 }

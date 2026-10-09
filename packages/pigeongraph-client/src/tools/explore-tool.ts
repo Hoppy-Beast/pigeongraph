@@ -2,6 +2,7 @@ import type { SuperNode } from '@pigeongraph/schema';
 import { ClientGraphStore } from '../store/client-graph.js';
 import { fetchSpans } from './span-fetcher.js';
 import { computeRisk } from './risk.js';
+import { rankNodesFuzzy, type RankedNode } from './resolver.js';
 
 export interface ExploreQueryInput {
   query: string;
@@ -20,6 +21,8 @@ export interface ExploreQueryResponse {
   query_summary: {
     query: string;
     resolved_anchor?: string;
+    resolved_score?: number;
+    alternatives?: Array<{ uid: string; score: number }>;
     epistemic_status: 'EXACT' | 'PROVISIONAL_LOWER_BOUND';
     total_graph_nodes_searched: number;
     duration_ms: number;
@@ -82,26 +85,28 @@ export class SuperGraphExploreEngine {
 
   public explore(input: ExploreQueryInput): ExploreQueryResponse {
     const start = performance.now();
-    const queryTerm = input.query.toLowerCase().trim();
     const allNodes = this.store.getAllNodes();
 
-    // 1. Resolve Anchor Symbol
-    let matchedNodes: SuperNode[] = [];
+    // 1. Resolve Anchor Symbol (shared resolver — parity with impact/trace)
+    let ranked: RankedNode[] = [];
     let epistemicStatus: 'EXACT' | 'PROVISIONAL_LOWER_BOUND' = 'EXACT';
 
     if (input.symbol_anchor) {
       const exact = this.store.getNode(input.symbol_anchor);
-      if (exact) matchedNodes = [exact];
+      if (exact) ranked = [{ node: exact, score: 100 }];
     }
 
-    if (matchedNodes.length === 0) {
-      const result = this.rankNodesFuzzy(input.query, allNodes);
-      matchedNodes = result.ranked;
+    if (ranked.length === 0) {
+      const result = rankNodesFuzzy(input.query, allNodes, this.store);
+      ranked = result.ranked;
       epistemicStatus = result.epistemicStatus;
     }
 
+    const matchedNodes: SuperNode[] = ranked.map((r) => r.node);
     const anchor = matchedNodes[0];
     const resolvedAnchor = anchor?.id;
+    const resolvedScore = ranked[0]?.score;
+    const alternatives = ranked.slice(0, 3).map((r) => ({ uid: r.node.id, score: r.score }));
 
     // 2. Format Symbol Definitions (limit/offset pagination, default 5, max 20)
     const totalMatches = matchedNodes.length;
@@ -383,6 +388,8 @@ export class SuperGraphExploreEngine {
       query_summary: {
         query: input.query,
         resolved_anchor: resolvedAnchor,
+        resolved_score: resolvedScore,
+        alternatives,
         epistemic_status: epistemicStatus,
         total_graph_nodes_searched: allNodes.length,
         duration_ms: Number(duration.toFixed(2)),
@@ -398,136 +405,6 @@ export class SuperGraphExploreEngine {
       total_matches: totalMatches,
       truncated: spansTruncated,
       next_offset: offset + symbols.length,
-    };
-  }
-
-  private rankNodesFuzzy(query: string, nodes: SuperNode[]): { ranked: SuperNode[]; epistemicStatus: 'EXACT' | 'PROVISIONAL_LOWER_BOUND' } {
-    const queryTerm = query.toLowerCase().trim();
-    if (!queryTerm) return { ranked: [], epistemicStatus: 'PROVISIONAL_LOWER_BOUND' };
-
-    // 0. Direct Route / Dispatch Mechanism match (e.g., "/exam", "GET /exam", "POST /api/orders")
-    const isRouteOrMethodQuery =
-      queryTerm.startsWith('/') ||
-      queryTerm.startsWith('get ') ||
-      queryTerm.startsWith('post ') ||
-      queryTerm.startsWith('put ') ||
-      queryTerm.startsWith('delete ') ||
-      queryTerm.startsWith('patch ');
-
-    const normalizedRoute = queryTerm.replace(/^(get|post|put|delete|patch)\s+/, '').trim();
-    const routeMatchedNodes: SuperNode[] = [];
-
-    for (const node of nodes) {
-      for (const edge of node.substrate.outgoingEdges) {
-        if (edge.kind === 'HANDLES_ROUTE' && edge.dispatchMechanism) {
-          const mech = edge.dispatchMechanism.toLowerCase();
-          if (
-            mech === queryTerm ||
-            mech.includes(queryTerm) ||
-            (normalizedRoute && normalizedRoute.length > 1 && mech.includes(normalizedRoute))
-          ) {
-            const targetNode = this.store.getNode(edge.targetId);
-            if (targetNode && !routeMatchedNodes.some((n) => n.id === targetNode.id)) {
-              routeMatchedNodes.push(targetNode);
-            }
-            if (!routeMatchedNodes.some((n) => n.id === node.id)) {
-              routeMatchedNodes.push(node);
-            }
-          }
-        }
-      }
-    }
-
-    if (routeMatchedNodes.length > 0 && (isRouteOrMethodQuery || queryTerm.includes('/'))) {
-      return { ranked: routeMatchedNodes, epistemicStatus: 'EXACT' };
-    }
-
-    // 1. Direct exact match
-    const exactMatches = nodes.filter(
-      (n) => n.name.toLowerCase() === queryTerm || n.qualifiedName.toLowerCase() === queryTerm
-    );
-    if (exactMatches.length > 0) {
-      return { ranked: exactMatches, epistemicStatus: 'EXACT' };
-    }
-
-    // Direct substring match
-    const substringMatches = nodes.filter(
-      (n) =>
-        n.name.toLowerCase().includes(queryTerm) ||
-        n.qualifiedName.toLowerCase().includes(queryTerm) ||
-        n.substrate.sourceLocation.filePath.toLowerCase().includes(queryTerm)
-    );
-    if (substringMatches.length > 0) {
-      return { ranked: substringMatches, epistemicStatus: 'EXACT' };
-    }
-
-    // 2. Multi-Signal Fuzzy & Token Scoring
-    const stopWords = new Set(['how', 'to', 'in', 'the', 'a', 'an', 'of', 'for', 'with', 'and', 'or', 'at', 'by', 'on', 'is', 'it']);
-    const rawTokens = queryTerm
-      .replace(/[^a-z0-9_]/g, ' ')
-      .split(/\s+/)
-      .filter((t) => t.length > 1 && !stopWords.has(t));
-
-    const queryKeywords = rawTokens.length > 0 ? rawTokens : queryTerm.split(/\s+/);
-    const scoredNodes: Array<{ node: SuperNode; score: number }> = [];
-
-    for (const node of nodes) {
-      let score = 0;
-
-      // Split camelCase & snake_case into tokens
-      const nameParts = node.name
-        .replace(/([a-z])([A-Z])/g, '$1 $2')
-        .toLowerCase()
-        .split(/[^a-z0-9]+/);
-      const qnameParts = node.qualifiedName
-        .replace(/([a-z])([A-Z])/g, '$1 $2')
-        .toLowerCase()
-        .split(/[^a-z0-9]+/);
-      const allSymbolTokens = new Set([...nameParts, ...qnameParts]);
-
-      for (const kw of queryKeywords) {
-        if (allSymbolTokens.has(kw)) {
-          score += 30;
-        } else {
-          for (const token of allSymbolTokens) {
-            if (token.startsWith(kw) || kw.startsWith(token)) {
-              score += 18;
-            } else if (token.includes(kw)) {
-              score += 10;
-            }
-          }
-        }
-
-        if (node.substrate.symbolSignature && node.substrate.symbolSignature.toLowerCase().includes(kw)) {
-          score += 12;
-        }
-
-        if (node.substrate.sourceLocation.filePath.toLowerCase().includes(kw)) {
-          score += 8;
-        }
-
-        if (node.substrate.rawDocstring && node.substrate.rawDocstring.toLowerCase().includes(kw)) {
-          score += 15;
-        }
-        if (node.semantic.conceptualSummary && node.semantic.conceptualSummary.toLowerCase().includes(kw)) {
-          score += 15;
-        }
-      }
-
-      if (node.processFlow.isEntryPoint) {
-        score += 2;
-      }
-
-      if (score > 0) {
-        scoredNodes.push({ node, score });
-      }
-    }
-
-    scoredNodes.sort((a, b) => b.score - a.score);
-
-    return {
-      ranked: scoredNodes.map((sn) => sn.node),
-      epistemicStatus: 'PROVISIONAL_LOWER_BOUND',
     };
   }
 }

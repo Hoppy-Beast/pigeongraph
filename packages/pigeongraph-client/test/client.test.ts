@@ -424,4 +424,27 @@ describe('Client Execution Layer & Query Surface Tests', () => {
     assert.ok(response.execution_flows.entry_points.length >= 1);
     assert.equal(response.execution_flows.entry_points[0].route, 'HTTP GET /entry');
   });
+
+  test('Task 1.4: resolver parity — fuzzy partial resolves same node across explore/impact/trace', () => {
+    const partial = 'verifyTok';
+    const exploreRes = exploreEngine.explore({ query: partial, include_blast_radius: false, include_spans: false });
+    assert.equal(exploreRes.query_summary.resolved_anchor, nodeA.id);
+    const summary = exploreRes.query_summary as unknown as {
+      resolved_score?: number;
+      alternatives?: Array<{ uid: string; score: number }>;
+    };
+    assert.equal(typeof summary.resolved_score, 'number');
+    assert.ok(Array.isArray(summary.alternatives));
+    assert.ok(summary.alternatives.length >= 1 && summary.alternatives.length <= 3);
+    assert.equal(summary.alternatives[0].uid, nodeA.id);
+
+    const impact = analyticalEngine.calculateImpact({ target_symbol: partial, max_depth: 3 });
+    assert.equal(impact.target, nodeA.id);
+    assert.ok(impact.total_affected_nodes >= 2);
+
+    const trace = analyticalEngine.tracePath({ from_symbol: partial, to_symbol: 'getKe' });
+    assert.equal(trace.found, true);
+    assert.equal(trace.from, nodeA.id);
+    assert.equal(trace.to, nodeB.id);
+  });
 });
