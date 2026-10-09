@@ -3,6 +3,7 @@ import { ClientGraphStore } from '../store/client-graph.js';
 import { fetchSpans } from './span-fetcher.js';
 import { computeRisk } from './risk.js';
 import { rankNodesFuzzy, type RankedNode } from './resolver.js';
+import { buildQueryCacheKey, type QueryCache } from './query-cache.js';
 
 export interface ExploreQueryInput {
   query: string;
@@ -38,6 +39,7 @@ export interface ExploreQueryResponse {
     epistemic_status: 'EXACT' | 'PROVISIONAL_LOWER_BOUND';
     total_graph_nodes_searched: number;
     duration_ms: number;
+    cached?: boolean;
   };
   symbols: Array<{
     uid: string;
@@ -140,14 +142,34 @@ function buildSemanticContext(anchor: SuperNode): SemanticContextEntry | undefin
 export class SuperGraphExploreEngine {
   private store: ClientGraphStore;
   private projectRoot: string;
+  private cache?: QueryCache;
 
-  constructor(store: ClientGraphStore, opts?: { projectRoot?: string }) {
+  constructor(store: ClientGraphStore, opts?: { projectRoot?: string; cache?: QueryCache }) {
     this.store = store;
     this.projectRoot = opts?.projectRoot ?? process.cwd();
+    this.cache = opts?.cache;
   }
 
   public explore(input: ExploreQueryInput): ExploreQueryResponse {
     const start = performance.now();
+    const epoch = this.store.getActiveEpoch();
+    let cacheKey: string | undefined;
+    if (this.cache) {
+      this.cache.invalidateOnEpoch(epoch);
+      cacheKey = buildQueryCacheKey(input, epoch);
+      const hit = this.cache.get(cacheKey);
+      if (hit) {
+        const freshDuration = performance.now() - start;
+        return {
+          ...hit.response,
+          query_summary: {
+            ...hit.response.query_summary,
+            duration_ms: Number(freshDuration.toFixed(2)),
+            cached: true,
+          },
+        };
+      }
+    }
     const allNodes = this.store.getAllNodes();
 
     // 1. Resolve Anchor Symbol (shared resolver — parity with impact/trace)
@@ -458,7 +480,7 @@ export class SuperGraphExploreEngine {
       if (entry) semanticContext = [entry];
     }
 
-    return {
+    const response: ExploreQueryResponse = {
       query_summary: {
         query: input.query,
         resolved_anchor: resolvedAnchor,
@@ -467,6 +489,7 @@ export class SuperGraphExploreEngine {
         epistemic_status: epistemicStatus,
         total_graph_nodes_searched: allNodes.length,
         duration_ms: Number(duration.toFixed(2)),
+        cached: false,
       },
       symbols,
       execution_flows: {
@@ -481,5 +504,10 @@ export class SuperGraphExploreEngine {
       next_offset: offset + symbols.length,
       semantic_context: semanticContext,
     };
+
+    if (this.cache && cacheKey) {
+      this.cache.set(cacheKey, response, epoch);
+    }
+    return response;
   }
 }

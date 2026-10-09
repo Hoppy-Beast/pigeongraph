@@ -356,6 +356,10 @@ export class SubstrateDatabase {
     }
   }
 
+  public searchNodesFts(query: string, limit = 20): SuperNode[] {
+    return this.searchFTS(query, limit);
+  }
+
   public getOutgoingEdges(sourceId: string): SubstrateEdge[] {
     const stmt = this.db.prepare('SELECT * FROM edges WHERE source = ?');
     const rows = stmt.all(sourceId) as Array<Record<string, unknown>>;
