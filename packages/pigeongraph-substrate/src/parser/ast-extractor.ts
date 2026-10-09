@@ -232,6 +232,10 @@ export class AstExtractor {
       if (typeDecl) {
         const typeNodeId = `sg://${repoId}/${filePath}#${typeDecl.name}`;
         const isExported = trimmed.startsWith('export');
+        const typeDoc =
+          typeDecl.kind === 'interface' || typeDecl.kind === 'enum'
+            ? this.extractJsDoc(lines, i)
+            : undefined;
         const typeNode: SuperNode = {
           id: typeNodeId,
           urn: `urn:supergraph:${repoId}:${filePath}#${typeDecl.name}`,
@@ -260,6 +264,7 @@ export class AstExtractor {
             symbolSignature: line.trim(),
             visibility: isExported ? 'public' : 'internal',
             modifiers: isExported ? ['exported'] : [],
+            ...(typeDoc !== undefined ? { rawDocstring: typeDoc } : {}),
             outgoingEdges: [],
             astEpochTimestamp: new Date().toISOString(),
           },
@@ -284,6 +289,7 @@ export class AstExtractor {
         const extendsName = classMatch[2];
         const classNodeId = `sg://${repoId}/${filePath}#${className}`;
         classBraceDepth = braceDepth;
+        const classDoc = this.extractJsDoc(lines, i);
 
         const classNode: SuperNode = {
           id: classNodeId,
@@ -313,6 +319,7 @@ export class AstExtractor {
             symbolSignature: line.trim(),
             visibility: 'public',
             modifiers: line.includes('export') ? ['exported'] : [],
+            ...(classDoc !== undefined ? { rawDocstring: classDoc } : {}),
             outgoingEdges: [],
             astEpochTimestamp: new Date().toISOString(),
           },
@@ -420,6 +427,7 @@ export class AstExtractor {
           }
           if (!foundMethodOpen) methodEndLine = Math.min(lineNum + 5, lines.length);
           const methodContent = lines.slice(i, methodEndLine).join('\n');
+          const methodDoc = this.extractJsDoc(lines, i);
 
           const methodNode: SuperNode = {
             id: methodNodeId,
@@ -459,6 +467,7 @@ export class AstExtractor {
               ],
               returnType,
               parameters: this.parseParameters(paramsRaw),
+              ...(methodDoc !== undefined ? { rawDocstring: methodDoc } : {}),
               outgoingEdges: [],
               astEpochTimestamp: new Date().toISOString(),
             },
@@ -536,6 +545,7 @@ export class AstExtractor {
         }
         if (!foundOpen) fnEndLine = Math.min(lineNum + 5, lines.length);
         const fnContent = lines.slice(i, fnEndLine).join('\n');
+        const fnDoc = this.extractJsDoc(lines, i);
 
         const fnNode: SuperNode = {
           id: fnNodeId,
@@ -579,6 +589,7 @@ export class AstExtractor {
             ],
             returnType,
             parameters: this.parseParameters(paramsRaw),
+            ...(fnDoc !== undefined ? { rawDocstring: fnDoc } : {}),
             outgoingEdges: [],
             astEpochTimestamp: new Date().toISOString(),
           },
@@ -753,6 +764,7 @@ export class AstExtractor {
         const className = classMatch[1];
         currentClass = className;
         const classNodeId = `sg://${repoId}/${filePath}#${className}`;
+        const classDoc = this.extractPythonDocstring(lines, i + 1, lines.length);
         const classNode: SuperNode = {
           id: classNodeId,
           urn: `urn:supergraph:${repoId}:${filePath}#${className}`,
@@ -774,6 +786,7 @@ export class AstExtractor {
             language: 'python',
             symbolSignature: line.trim(),
             visibility: 'public',
+            ...(classDoc !== undefined ? { rawDocstring: classDoc } : {}),
             outgoingEdges: [],
             astEpochTimestamp: new Date().toISOString(),
           },
@@ -823,6 +836,7 @@ export class AstExtractor {
         const fnContent = lines.slice(i, fnEndLine).join('\n');
         const qname = currentClass ? `${currentClass}.${fnName}` : fnName;
         const fnNodeId = `sg://${repoId}/${filePath}#${qname}`;
+        const pyDoc = this.extractPythonDocstring(lines, pySigEndLine, fnEndLine);
         const fnNode: SuperNode = {
           id: fnNodeId,
           urn: `urn:supergraph:${repoId}:${filePath}#${qname}`,
@@ -846,6 +860,7 @@ export class AstExtractor {
             visibility: fnName.startsWith('_') ? 'private' : 'public',
             returnType,
             parameters: this.parseParameters(paramsRaw),
+            ...(pyDoc !== undefined ? { rawDocstring: pyDoc } : {}),
             outgoingEdges: [],
             astEpochTimestamp: new Date().toISOString(),
           },
@@ -1629,6 +1644,98 @@ export class AstExtractor {
       edges.push({ sourceId: fileNode.id, targetId: sectionNodeId, edge: containsEdge });
       nodes.push(sectionNode);
     }
+  }
+
+  private extractJsDoc(lines: string[], declIndex: number): string | undefined {
+    const start = Math.max(0, declIndex - 10);
+    let endIdx = -1;
+    let startIdx = -1;
+    for (let j = declIndex - 1; j >= start; j--) {
+      const trimmed = (lines[j] ?? '').trim();
+      if (!trimmed || trimmed.startsWith('//')) {
+        continue;
+      }
+      if (endIdx === -1) {
+        if (trimmed.endsWith('*/')) {
+          endIdx = j;
+          if (trimmed.includes('/**')) {
+            startIdx = j;
+            break;
+          }
+          continue;
+        }
+        if (trimmed.startsWith('*') || trimmed.startsWith('/*')) {
+          return undefined;
+        }
+        return undefined;
+      } else {
+        if (trimmed.includes('/**')) {
+          startIdx = j;
+          break;
+        }
+        if (trimmed.startsWith('*') || trimmed.startsWith('/*')) {
+          continue;
+        }
+        return undefined;
+      }
+    }
+    if (startIdx === -1 || endIdx === -1) return undefined;
+    const block = lines.slice(startIdx, endIdx + 1);
+    const cleaned: string[] = [];
+    for (const raw of block) {
+      let t = raw.trim();
+      if (t.startsWith('/**')) t = t.slice(3);
+      else if (t.startsWith('/*')) t = t.slice(2);
+      else if (t.startsWith('*')) t = t.slice(1);
+      if (t.endsWith('*/')) t = t.slice(0, t.length - 2);
+      t = t.replace(/^\s*\*\s?/, '').trim();
+      cleaned.push(t);
+    }
+    const text = cleaned.join('\n').trim();
+    if (!text) return undefined;
+    return text.slice(0, 1500);
+  }
+
+  private extractPythonDocstring(
+    lines: string[],
+    bodyStartIdx: number,
+    endLineExclusive: number
+  ): string | undefined {
+    const limit = Math.min(lines.length, endLineExclusive, bodyStartIdx + 21);
+    let docIdx = -1;
+    for (let j = bodyStartIdx; j < limit; j++) {
+      const raw = lines[j] ?? '';
+      if (!raw.trim()) continue;
+      docIdx = j;
+      break;
+    }
+    if (docIdx === -1) return undefined;
+    const firstTrimmed = (lines[docIdx] ?? '').trim();
+    let quote: string | null = null;
+    if (firstTrimmed.startsWith('"""')) quote = '"""';
+    else if (firstTrimmed.startsWith("'''")) quote = "'''";
+    else return undefined;
+    const afterOpen = firstTrimmed.slice(3);
+    const closeOnFirst = afterOpen.indexOf(quote);
+    if (closeOnFirst !== -1) {
+      const text = afterOpen.slice(0, closeOnFirst).trim();
+      if (!text) return undefined;
+      return text.slice(0, 1500);
+    }
+    const parts: string[] = [afterOpen];
+    const maxLine = Math.min(lines.length, docIdx + 20 + 1);
+    for (let k = docIdx + 1; k < maxLine && k < endLineExclusive; k++) {
+      const l = lines[k] ?? '';
+      const closeIdx = l.indexOf(quote);
+      if (closeIdx !== -1) {
+        parts.push(l.slice(0, closeIdx));
+        const text = parts.join('\n').trim();
+        if (!text) return undefined;
+        return text.slice(0, 1500);
+      }
+      parts.push(l);
+    }
+    return undefined;
   }
 
   private parseParameters(paramsRaw?: string): Array<{ name: string; type: string }> {

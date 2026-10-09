@@ -739,4 +739,133 @@ def multi_handler():
       'caller must have CALLS edge to same-file callee'
     );
   });
+
+  test('AstExtractor attaches JSDoc and Python docstrings via rawDocstring', () => {
+    const tsCode = `
+/**
+ * Adds two numbers together.
+ * @param a first operand
+ */
+export function documentedFn(a: string): string {
+  return a;
+}
+
+export function undocumentedFn(a: string): string {
+  return a;
+}
+
+/**
+ * Service class docs.
+ */
+export class DocumentedClass {
+  /**
+   * Does work inside class.
+   */
+  doWork(): void {}
+}
+
+/** Interface docs here. */
+export interface DocumentedInterface {
+  name: string;
+}
+
+/**
+ * Role enum docs.
+ */
+export enum DocumentedEnum {
+  Admin = "admin",
+}
+    `;
+
+    const { nodes: tsNodes } = extractor.parseFile({
+      repoId: 'test-repo',
+      filePath: 'src/docstring.ts',
+      content: tsCode,
+      epoch: 1,
+      lamportClock: 1,
+    });
+
+    const documentedFn = tsNodes.find((n) => n.name === 'documentedFn');
+    assert.ok(documentedFn, 'documentedFn must be parsed');
+    assert.ok(
+      documentedFn?.substrate.rawDocstring?.includes('Adds two numbers together.'),
+      'TS JSDoc must be attached to documentedFn'
+    );
+
+    const undocumentedFn = tsNodes.find((n) => n.name === 'undocumentedFn');
+    assert.ok(undocumentedFn, 'undocumentedFn must be parsed');
+    assert.equal(
+      undocumentedFn?.substrate.rawDocstring,
+      undefined,
+      'undocumented symbols must have undefined rawDocstring (no placeholder)'
+    );
+
+    const documentedClass = tsNodes.find((n) => n.name === 'DocumentedClass');
+    assert.ok(
+      documentedClass?.substrate.rawDocstring?.includes('Service class docs.'),
+      'TS JSDoc must be attached to class'
+    );
+
+    const doWork = tsNodes.find((n) => n.name === 'doWork');
+    assert.ok(
+      doWork?.substrate.rawDocstring?.includes('Does work inside class.'),
+      'TS JSDoc must be attached to method'
+    );
+
+    const iface = tsNodes.find((n) => n.name === 'DocumentedInterface');
+    assert.ok(
+      iface?.substrate.rawDocstring?.includes('Interface docs here.'),
+      'TS JSDoc must be attached to interface'
+    );
+
+    const enumNode = tsNodes.find((n) => n.name === 'DocumentedEnum');
+    assert.ok(
+      enumNode?.substrate.rawDocstring?.includes('Role enum docs.'),
+      'TS JSDoc must be attached to enum'
+    );
+
+    const pyCode = `def documented_py():
+    """Does documented work.
+
+    Details here.
+    """
+    return 1
+
+def undocumented_py():
+    return 2
+
+def single_quote_py():
+    '''Single quote docstring.'''
+    return 3
+    `;
+
+    const { nodes: pyNodes } = extractor.parseFile({
+      repoId: 'test-repo',
+      filePath: 'src/docstring.py',
+      content: pyCode,
+      epoch: 1,
+      lamportClock: 1,
+    });
+
+    const documentedPy = pyNodes.find((n) => n.name === 'documented_py');
+    assert.ok(documentedPy, 'documented_py must be parsed');
+    assert.ok(
+      documentedPy?.substrate.rawDocstring?.includes('Does documented work.'),
+      'Python docstring must be attached'
+    );
+
+    const undocumentedPy = pyNodes.find((n) => n.name === 'undocumented_py');
+    assert.ok(undocumentedPy, 'undocumented_py must be parsed');
+    assert.equal(
+      undocumentedPy?.substrate.rawDocstring,
+      undefined,
+      'undocumented Python symbols must have undefined rawDocstring'
+    );
+
+    const singleQuotePy = pyNodes.find((n) => n.name === 'single_quote_py');
+    assert.ok(
+      singleQuotePy?.substrate.rawDocstring?.includes('Single quote docstring.'),
+      "Python ''' docstring must be attached"
+    );
+  });
 });
