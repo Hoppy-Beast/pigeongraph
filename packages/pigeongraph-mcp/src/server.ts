@@ -1,4 +1,4 @@
-import { ClientGraphStore, DualBufferReconciler, SuperGraphExploreEngine, AnalyticalToolsEngine } from '@pigeongraph/client';
+import { ClientGraphStore, DualBufferReconciler, SuperGraphExploreEngine, AnalyticalToolsEngine, WorkingSet } from '@pigeongraph/client';
 import { SubstrateDaemon } from '@pigeongraph/substrate';
 
 export interface McpServerOptions {
@@ -15,6 +15,7 @@ export class SuperGraphMcpServer {
   private reconciler: DualBufferReconciler;
   private projectRoot: string;
   private repoId: string;
+  private workingSet: WorkingSet;
 
   constructor(options: McpServerOptions) {
     this.projectRoot = options.projectRoot;
@@ -23,6 +24,7 @@ export class SuperGraphMcpServer {
     this.reconciler = new DualBufferReconciler(this.store);
     this.exploreEngine = new SuperGraphExploreEngine(this.store, { projectRoot: this.projectRoot });
     this.analyticalEngine = new AnalyticalToolsEngine(this.store);
+    this.workingSet = new WorkingSet();
 
     if (options.daemon) {
       const existing = options.daemon.db.getAllNodes();
@@ -148,6 +150,21 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
           required: ['from_symbol', 'to_symbol'],
         },
       },
+      {
+        name: 'pigeongraph_context',
+        description: `Observational working-set session memory digest (LRU, max 50 anchors). 'get' returns the most recent entries (max 10, <500 tokens total); 'clear' empties the memory. Recording happens automatically on every explore/impact; this tool never recomputes graph state.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: {
+              type: 'string',
+              enum: ['get', 'clear'],
+              description: 'get returns the digest, clear empties it.',
+            },
+          },
+          required: ['action'],
+        },
+      },
       // Backward compatibility alias
       {
         name: 'supergraph_explore',
@@ -178,9 +195,10 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
   public handleToolCall(toolName: string, args: Record<string, unknown>): unknown {
     switch (toolName) {
       case 'pigeongraph_explore':
-      case 'supergraph_explore':
-        return this.exploreEngine.explore({
-          query: String(args.query ?? ''),
+      case 'supergraph_explore': {
+        const query = String(args.query ?? '');
+        const result = this.exploreEngine.explore({
+          query,
           task_context: args.task_context ? String(args.task_context) : undefined,
           symbol_anchor: args.symbol_anchor ? String(args.symbol_anchor) : undefined,
           depth: typeof args.depth === 'number' ? args.depth : 3,
@@ -195,14 +213,30 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
           compact: args.compact === true,
           projectRoot: typeof args.projectRoot === 'string' ? args.projectRoot : this.projectRoot,
         });
+        // Observational only: always return the fresh result (no short-circuit).
+        this.recordExplore(query, result as {
+          query_summary: { resolved_anchor?: string; resolved_score?: number };
+          symbols: unknown[];
+          blast_radius?: { risk_level?: string };
+        });
+        return result;
+      }
 
       case 'pigeongraph_impact':
-      case 'supergraph_impact':
-        return this.analyticalEngine.calculateImpact({
-          target_symbol: String(args.target_symbol ?? ''),
+      case 'supergraph_impact': {
+        const targetSymbol = String(args.target_symbol ?? '');
+        const result = this.analyticalEngine.calculateImpact({
+          target_symbol: targetSymbol,
           direction: args.direction as any,
           max_depth: typeof args.max_depth === 'number' ? args.max_depth : 3,
         });
+        this.recordImpact(targetSymbol, result as {
+          target: string;
+          risk_level?: string;
+          total_affected_nodes: number;
+        });
+        return result;
+      }
 
       case 'pigeongraph_trace':
       case 'supergraph_trace':
@@ -211,9 +245,71 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
           to_symbol: String(args.to_symbol ?? ''),
         });
 
+      case 'pigeongraph_context': {
+        const action = String(args.action ?? 'get');
+        if (action === 'clear') {
+          this.workingSet.clear();
+          return { action: 'clear', cleared: true, count: 0 };
+        }
+        if (action === 'get') {
+          const entries = this.workingSet.list(10).map((e) => ({
+            query: e.query.slice(0, 60),
+            anchor: e.anchorId.slice(0, 100),
+            ...(e.summary.resolved_score !== undefined ? { score: e.summary.resolved_score } : {}),
+            symbols: e.summary.symbols_count,
+            ...(e.summary.risk_level !== undefined ? { risk: e.summary.risk_level } : {}),
+            hits: e.hits,
+          }));
+          return {
+            action: 'get',
+            count: this.workingSet.size,
+            entries,
+            truncated: this.workingSet.size > entries.length,
+          };
+        }
+        throw new Error(`Unknown action for pigeongraph_context: ${action}`);
+      }
+
       default:
         throw new Error(`Unknown tool: ${toolName}`);
     }
+  }
+
+  /** Observational record of a fresh explore result; never alters the result. */
+  private recordExplore(
+    query: string,
+    result: {
+      query_summary: { resolved_anchor?: string; resolved_score?: number };
+      symbols: unknown[];
+      blast_radius?: { risk_level?: string };
+    }
+  ): void {
+    const anchorId = result.query_summary.resolved_anchor;
+    if (!anchorId) return;
+    const anchorNode = this.store.getNode(anchorId);
+    if (!anchorNode) return;
+    this.workingSet.record(query, anchorNode, {
+      resolved_anchor: anchorId,
+      ...(result.query_summary.resolved_score !== undefined
+        ? { resolved_score: result.query_summary.resolved_score }
+        : {}),
+      symbols_count: result.symbols.length,
+      ...(result.blast_radius?.risk_level !== undefined ? { risk_level: result.blast_radius.risk_level } : {}),
+    });
+  }
+
+  /** Observational record of an impact result; never alters the result. */
+  private recordImpact(
+    targetSymbol: string,
+    result: { target: string; risk_level?: string; total_affected_nodes: number }
+  ): void {
+    const anchorNode = this.store.getNode(result.target);
+    if (!anchorNode) return;
+    this.workingSet.record(targetSymbol, anchorNode, {
+      resolved_anchor: result.target,
+      symbols_count: result.total_affected_nodes,
+      ...(result.risk_level !== undefined ? { risk_level: result.risk_level } : {}),
+    });
   }
 
   public handleJsonRpcMessage(messageStr: string): string | null {
@@ -293,5 +389,9 @@ Do NOT default to multi-turn grep or file searches for code symbols. PigeonGraph
 
   public getStore(): ClientGraphStore {
     return this.store;
+  }
+
+  public getWorkingSet(): WorkingSet {
+    return this.workingSet;
   }
 }

@@ -5,3 +5,4 @@ export * from './tools/span-fetcher.js';
 export * from './tools/analytical-tools.js';
 export * from './tools/resolver.js';
 export * from './tools/risk.js';
+export * from './memory/working-set.js';
