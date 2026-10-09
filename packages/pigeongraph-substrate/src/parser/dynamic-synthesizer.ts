@@ -48,6 +48,38 @@ export class DynamicDispatchSynthesizer {
     return { synthesizedEdges };
   }
 
+  private lineNumberAtIndex(content: string, index: number): number {
+    let line = 1;
+    for (let i = 0; i < index; i++) {
+      if (content.charCodeAt(i) === 10) line++;
+    }
+    return line;
+  }
+
+  private nearestEnclosingSymbol(
+    filePath: string,
+    lineNumber: number,
+    nodesByFile: Map<string, SuperNode[]>
+  ): SuperNode | undefined {
+    const fileNodes = nodesByFile.get(filePath);
+    if (!fileNodes || fileNodes.length === 0) return undefined;
+    let best: SuperNode | undefined;
+    let bestSpan = Infinity;
+    for (const n of fileNodes) {
+      if (n.kind !== 'function' && n.kind !== 'method') continue;
+      const s = n.substrate.sourceLocation.startLine;
+      const e = n.substrate.sourceLocation.endLine;
+      if (lineNumber >= s && lineNumber <= e) {
+        const span = e - s;
+        if (span < bestSpan) {
+          bestSpan = span;
+          best = n;
+        }
+      }
+    }
+    return best ?? fileNodes[0];
+  }
+
   private synthesizeEventEmitters(
     nodesByFile: Map<string, SuperNode[]>,
     fileContents: Map<string, string>,
@@ -63,15 +95,18 @@ export class DynamicDispatchSynthesizer {
       const fileNodes = nodesByFile.get(filePath);
       if (!fileNodes || fileNodes.length === 0) continue;
 
+      onRegex.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = onRegex.exec(content)) !== null) {
         const eventName = match[1];
         if (!eventListeners.has(eventName)) {
           eventListeners.set(eventName, []);
         }
+        const matchLine = this.lineNumberAtIndex(content, match.index);
+        const enclosing = this.nearestEnclosingSymbol(filePath, matchLine, nodesByFile) ?? fileNodes[0];
         eventListeners.get(eventName)!.push({
-          nodeId: fileNodes[0].id,
-          line: fileNodes[0].substrate.sourceLocation.startLine,
+          nodeId: enclosing.id,
+          line: matchLine,
         });
       }
     }
@@ -85,15 +120,19 @@ export class DynamicDispatchSynthesizer {
       const fileNodes = nodesByFile.get(filePath);
       if (!fileNodes || fileNodes.length === 0) continue;
 
+      emitRegex.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = emitRegex.exec(content)) !== null) {
         const eventName = match[1];
         const listeners = eventListeners.get(eventName);
         if (!listeners || listeners.length === 0) continue;
 
+        const emitLine = this.lineNumberAtIndex(content, match.index);
+        const emitter = this.nearestEnclosingSymbol(filePath, emitLine, nodesByFile) ?? fileNodes[0];
+
         const cappedListeners = listeners.slice(0, 6);
         for (const listener of cappedListeners) {
-          if (listener.nodeId === fileNodes[0].id) continue;
+          if (listener.nodeId === emitter.id) continue;
 
           const edge: SubstrateEdge = {
             targetId: listener.nodeId,
@@ -104,8 +143,8 @@ export class DynamicDispatchSynthesizer {
             dispatchMechanism: `event_emitter.on(${eventName})`,
           };
 
-          fileNodes[0].substrate.outgoingEdges.push(edge);
-          results.push({ sourceId: fileNodes[0].id, targetId: listener.nodeId, edge });
+          emitter.substrate.outgoingEdges.push(edge);
+          results.push({ sourceId: emitter.id, targetId: listener.nodeId, edge });
         }
       }
     }
@@ -260,9 +299,18 @@ export class DynamicDispatchSynthesizer {
       const renderNode = fileNodes.find((n) => n.name === 'render');
       if (!renderNode) continue;
 
+      const lines = content.split(/\r?\n/);
+
       for (const node of fileNodes) {
         if (node.id === renderNode.id) continue;
         if (node.kind !== 'method' && node.kind !== 'function') continue;
+
+        const s = node.substrate.sourceLocation.startLine;
+        const e = node.substrate.sourceLocation.endLine;
+        const body = lines.slice(Math.max(0, s - 1), Math.min(lines.length, e)).join('\n');
+        if (!body.includes('setState') && !body.includes('setCount') && !body.includes('dispatch(')) {
+          continue;
+        }
 
         const edge: SubstrateEdge = {
           targetId: renderNode.id,

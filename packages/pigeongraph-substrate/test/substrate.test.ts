@@ -415,6 +415,102 @@ Agents will spend fewer tokens on exploratory grepping.
     assert.equal(routeEdge.edge.dispatchMechanism, 'HTTP GET /api/orders');
   });
 
+  test('DynamicDispatchSynthesizer scopes event dispatch to enclosing symbols', () => {
+    const fileContents = new Map<string, string>();
+
+    const scopedCode = `
+export function listenForOrders() {
+  eventBus.on('order:created', (data) => {
+    reserveStock(data.id);
+  });
+}
+export function createOrder(orderId: string) {
+  eventBus.emit('order:created', { id: orderId });
+}
+    `;
+
+    fileContents.set('src/scoped/bus.ts', scopedCode);
+
+    const scopedNodes = extractor.parseFile({
+      repoId: 'app',
+      filePath: 'src/scoped/bus.ts',
+      content: scopedCode,
+      epoch: 1,
+      lamportClock: 1,
+    }).nodes;
+
+    const listenerNode = scopedNodes.find((n) => n.name === 'listenForOrders')!;
+    const emitterNode = scopedNodes.find((n) => n.name === 'createOrder')!;
+    assert.ok(listenerNode, 'listener function must be parsed');
+    assert.ok(emitterNode, 'emitter function must be parsed');
+
+    const { synthesizedEdges } = synthesizer.synthesize(scopedNodes, fileContents);
+
+    const eventEdges = synthesizedEdges.filter((e) => e.edge.kind === 'DYNAMIC_DISPATCH_EVENT');
+    assert.ok(eventEdges.length > 0, 'Should synthesize scoped DYNAMIC_DISPATCH_EVENT edge');
+    const scopedEdge = eventEdges.find(
+      (e) => e.sourceId === emitterNode.id && e.targetId === listenerNode.id
+    );
+    assert.ok(
+      scopedEdge,
+      `Emitter symbol should link to listener symbol (got ${JSON.stringify(eventEdges.map((e) => ({ s: e.sourceId, t: e.targetId })))})`
+    );
+    assert.ok(scopedEdge.sourceId.includes('#'), 'emitter must be a symbol UID');
+    assert.ok(scopedEdge.targetId.includes('#'), 'listener must be a symbol UID');
+    assert.equal(scopedEdge.edge.dispatchMechanism, 'event_emitter.on(order:created)');
+    assert.equal(scopedEdge.edge.confidenceScore, 0.85);
+  });
+
+  test('DynamicDispatchSynthesizer scopes React re-renders to setState owners', () => {
+    const fileContents = new Map<string, string>();
+
+    const reactCode = `
+export function render() {
+  return null;
+}
+export function updateCount() {
+  setCount(c + 1);
+}
+export function unrelatedHelper() {
+  return 42;
+}
+    `;
+
+    fileContents.set('src/scoped/counter.tsx', reactCode);
+
+    const reactNodes = extractor.parseFile({
+      repoId: 'app',
+      filePath: 'src/scoped/counter.tsx',
+      content: reactCode,
+      epoch: 1,
+      lamportClock: 1,
+    }).nodes;
+
+    const renderNode = reactNodes.find((n) => n.name === 'render')!;
+    const updaterNode = reactNodes.find((n) => n.name === 'updateCount')!;
+    const helperNode = reactNodes.find((n) => n.name === 'unrelatedHelper')!;
+    assert.ok(renderNode, 'render must be parsed');
+    assert.ok(updaterNode, 'updater must be parsed');
+    assert.ok(helperNode, 'helper must be parsed');
+
+    const { synthesizedEdges } = synthesizer.synthesize(reactNodes, fileContents);
+
+    const reactEdges = synthesizedEdges.filter(
+      (e) => e.edge.kind === 'DYNAMIC_DISPATCH_REACT_STATE'
+    );
+    assert.ok(
+      reactEdges.some((e) => e.sourceId === updaterNode.id && e.targetId === renderNode.id),
+      'setState owner must link to render'
+    );
+    assert.ok(
+      !reactEdges.some((e) => e.sourceId === helperNode.id),
+      'helper without setState must not link to render'
+    );
+    for (const e of reactEdges) {
+      assert.equal(e.edge.confidenceScore, 0.9);
+    }
+  });
+
   test('DynamicDispatchSynthesizer parses Python route decorators, middleware, and route guards', () => {
     const fileContents = new Map<string, string>();
 
