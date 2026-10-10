@@ -515,7 +515,7 @@ export class SuperGraphExploreEngine {
       semantic_context: semanticContext,
     };
 
-    if (this.cache && cacheKey) {
+    if (this.cache && cacheKey && !this.isLazySpans()) {
       this.cache.set(cacheKey, response, epoch);
     }
     return response;
