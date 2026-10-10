@@ -1,6 +1,6 @@
 {
   "name": "@pigeongraph/mcp",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "type": "module",
   "bin": {
     "pigeongraph": "./dist/cli.js"

@@ -327,7 +327,7 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
           id,
           result: {
             protocolVersion: '2024-11-05',
-            serverInfo: { name: 'pigeongraph-mcp', version: '1.0.7' },
+            serverInfo: { name: 'pigeongraph-mcp', version: '1.1.0' },
             instructions: `You are equipped with PigeonGraph, a zero-latency code knowledge graph.
 Always query PigeonGraph (pigeongraph_explore) first when:
 - Finding where functions, classes, interfaces, routes (e.g. /exam), middleware (e.g. ProtectedRoute, CORSMiddleware), or components are defined.
