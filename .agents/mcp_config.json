@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "pigeongraph": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "pigeongraph",
+        "serve-mcp"
+      ]
+    }
+  }
+}

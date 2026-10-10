@@ -181,4 +181,81 @@ describe('AgentInstaller Tests', () => {
       'expected templates/steering/AGENTS.md to mention pigeongraph_context'
     );
   });
+
+  test('workspace Antigravity config is always portable npx form (task 6.1)', () => {
+    const portableProject = join(testDir, 'portable-app');
+    AgentInstaller.initProject(portableProject);
+
+    const wsPath = AgentInstaller.getAntigravityWorkspaceMcpPath(portableProject);
+    assert.ok(existsSync(wsPath), 'workspace .agents/mcp_config.json should exist');
+    const wsJson = JSON.parse(readFileSync(wsPath, 'utf-8'));
+    assert.equal(wsJson.mcpServers.pigeongraph.command, 'npx');
+    assert.deepEqual(wsJson.mcpServers.pigeongraph.args, ['-y', 'pigeongraph', 'serve-mcp']);
+  });
+
+  test('installMcp keeps global resolved entry but writes portable workspace entry (task 6.1)', () => {
+    const proj = join(testDir, 'portable-install-app');
+    const globalAg = join(testDir, 'portable-global-mcp.json');
+    const res = AgentInstaller.installMcp({
+      projectRoot: proj,
+      claudeConfigPath: join(testDir, 'portable-claude.json'),
+      cursorConfigPath: join(testDir, 'portable-cursor.json'),
+      antigravityConfigPath: globalAg,
+      geminiConfigPath: join(testDir, 'portable-gemini.json'),
+      target: 'antigravity',
+    });
+    assert.equal(res.success, true);
+
+    // Global/user config behavior unchanged: keeps whatever resolveCommand yields.
+    const expectedGlobal = AgentInstaller.resolveCommand('auto');
+    const globalJson = JSON.parse(readFileSync(globalAg, 'utf-8'));
+    assert.equal(globalJson.mcpServers.pigeongraph.command, expectedGlobal.command);
+    assert.deepEqual(globalJson.mcpServers.pigeongraph.args, expectedGlobal.args);
+
+    // Workspace config travels with the repo: always portable npx form.
+    const wsPath = AgentInstaller.getAntigravityWorkspaceMcpPath(proj);
+    const wsJson = JSON.parse(readFileSync(wsPath, 'utf-8'));
+    assert.equal(wsJson.mcpServers.pigeongraph.command, 'npx');
+    assert.deepEqual(wsJson.mcpServers.pigeongraph.args, ['-y', 'pigeongraph', 'serve-mcp']);
+  });
+
+  test('steering guidance carries retry-once rule before grep fallback (task 6.1)', () => {
+    const guidance = AgentInstaller.PIGEONGRAPH_STEERING_GUIDANCE;
+    assert.ok(guidance.includes('ALWAYS call PigeonGraph first'), 'PigeonGraph-first intact');
+    assert.ok(guidance.includes('pigeongraph index'), 'retry rule mentions pigeongraph index');
+    assert.ok(guidance.toLowerCase().includes('retry'), 'retry rule mentions retry');
+
+    const candidates = [
+      join(process.cwd(), 'templates', 'steering', 'AGENTS.md'),
+      join(process.cwd(), '..', '..', 'templates', 'steering', 'AGENTS.md'),
+    ];
+    let templateContent = '';
+    for (const p of candidates) {
+      try {
+        templateContent = readFileSync(p, 'utf-8');
+        if (templateContent) break;
+      } catch {
+        // try next
+      }
+    }
+    assert.ok(templateContent.includes('pigeongraph index'), 'templates/steering/AGENTS.md carries retry rule');
+
+    const mdcCandidates = candidates.map((p) => p.replace(/AGENTS\.md$/, 'pigeongraph.mdc'));
+    let mdcContent = '';
+    for (const p of mdcCandidates) {
+      try {
+        mdcContent = readFileSync(p, 'utf-8');
+        if (mdcContent) break;
+      } catch {
+        // try next
+      }
+    }
+    assert.ok(mdcContent.includes('pigeongraph index'), 'templates/steering/pigeongraph.mdc carries retry rule');
+
+    const retryProject = join(testDir, 'retry-app');
+    AgentInstaller.installSteering(retryProject);
+    const agRule = readFileSync(join(retryProject, '.agents', 'rules', 'pigeongraph.md'), 'utf-8');
+    assert.ok(agRule.includes('ALWAYS call PigeonGraph first'), 'Antigravity rule keeps PigeonGraph-first');
+    assert.ok(agRule.includes('pigeongraph index'), 'generated Antigravity rule carries retry rule');
+  });
 });

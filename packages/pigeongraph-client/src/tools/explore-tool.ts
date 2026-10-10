@@ -87,6 +87,11 @@ export interface ExploreQueryResponse {
   truncated?: boolean;
   next_offset?: number;
   semantic_context?: SemanticContextEntry[];
+  /**
+   * Task 6.1: actionable guidance set only when symbols is empty, so agents
+   * retry `pigeongraph index` instead of permanently falling back to grep.
+   */
+  hint?: string;
 }
 
 /**
@@ -514,6 +519,14 @@ export class SuperGraphExploreEngine {
       next_offset: offset + symbols.length,
       semantic_context: semanticContext,
     };
+
+    // Task 6.1: empty results must tell the agent exactly what to do next.
+    if (symbols.length === 0) {
+      response.hint =
+        allNodes.length === 0
+          ? 'Empty graph — run `pigeongraph index` in the repo root, then retry your query.'
+          : 'No match — check spelling or try a route path (e.g. `/api/login`); if the graph may be stale, run `pigeongraph index` in the repo root, then retry.';
+    }
 
     if (this.cache && cacheKey && !this.isLazySpans()) {
       this.cache.set(cacheKey, response, epoch);

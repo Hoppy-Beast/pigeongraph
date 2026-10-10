@@ -239,10 +239,13 @@ export class AgentInstaller {
 
       // Workspace-local .agents/mcp_config.json travels with the repo,
       // so anyone cloning gets PigeonGraph without running install-mcp.
+      // Task 6.1: ALWAYS portable npx form — never absolute local paths.
+      // Global/user configs above keep the resolved entry.
       const workspacePath = AgentInstaller.getAntigravityWorkspaceMcpPath(projectRoot);
       const wsJson = AgentInstaller.safeReadJson(workspacePath);
       wsJson.mcpServers = wsJson.mcpServers || {};
-      wsJson.mcpServers.pigeongraph = mcpEntry;
+      const portable = AgentInstaller.resolveCommand('npx');
+      wsJson.mcpServers.pigeongraph = { command: portable.command, args: portable.args };
       const okWs = AgentInstaller.safeWriteJson(workspacePath, wsJson);
       targets.push({ name: 'Antigravity Workspace (.agents/mcp_config.json)', updated: okWs, path: workspacePath });
     }
@@ -368,12 +371,14 @@ export class AgentInstaller {
     AgentInstaller.safeWriteJson(claudeCodeMcpPath, claudeJson);
 
     // Workspace-local Antigravity MCP so clones work with zero global setup.
+    // Task 6.1: ALWAYS portable npx form — never absolute local paths.
     const agWorkspacePath = AgentInstaller.getAntigravityWorkspaceMcpPath(projectRoot);
     const agWsJson = AgentInstaller.safeReadJson(agWorkspacePath);
     agWsJson.mcpServers = agWsJson.mcpServers || {};
+    const portable = AgentInstaller.resolveCommand('npx');
     agWsJson.mcpServers.pigeongraph = {
-      command: resolved.command,
-      args: resolved.args,
+      command: portable.command,
+      args: portable.args,
     };
     AgentInstaller.safeWriteJson(agWorkspacePath, agWsJson);
 
@@ -410,6 +415,7 @@ When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** bef
 - Searching for raw non-code string literals (e.g., specific error messages, CSS classes, UI copy, regex patterns in .env/markdown).
 - Searching for regex patterns across non-code files.
 - PigeonGraph returned 0 results for a symbol.
+- If PigeonGraph returns 0 results: run \`pigeongraph index\` in the repo root, retry the query once, and only then fall back to grep.
 
 #### 4. Efficiency flags + working-set memory:
 - \`pigeongraph_explore\` supports \`limit\`/\`offset\` pagination (\`next_offset\`/\`total_matches\`), \`token_budget\` + \`include_spans\` for bounded source slices, \`include_semantic\`/\`include_flows\`/\`include_dispatches\`/\`include_blast_radius\` toggles, and \`compact:true\` for symbols + \`query_summary\` + pagination only (skips flows/dispatches/blast_radius/spans/\`semantic_context\`).
@@ -491,6 +497,7 @@ When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** bef
 - Efficiency flags: \`limit\`/\`offset\` pagination (\`next_offset\`/\`total_matches\`), \`token_budget\` + \`include_spans\`, \`include_semantic\`/\`include_flows\`/\`include_dispatches\` toggles, and \`compact:true\` for symbols + query_summary only.
 - Recent anchors auto-record to the working-set; inspect via \`pigeongraph_context\` (\`get\`/\`clear\`).
 - Use \`grep\` ONLY for raw non-code string literals, comments, or regex across text files.
+- If PigeonGraph returns 0 results: run \`pigeongraph index\` in the repo root, retry once, and only then fall back to grep.
 `;
     try {
       const cursorRulePath = join(projectRoot, '.cursor', 'rules', 'pigeongraph.mdc');
@@ -525,7 +532,7 @@ When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** (\`
 - Use \`pigeongraph_impact\` to assess blast radius before refactoring.
 - Efficiency flags: \`limit\`/\`offset\`, \`token_budget\` + \`include_spans\`, \`include_semantic\`/\`include_flows\`/\`include_dispatches\` toggles, and \`compact:true\` for symbols + query_summary only.
 - Recent anchors auto-record to the working-set; inspect via \`pigeongraph_context\` (\`get\`/\`clear\`).
-- Use \`grep\` ONLY for raw non-code string literals, comments, or regex across text files, or when PigeonGraph returned 0 results.
+- Use \`grep\` ONLY for raw non-code string literals, comments, or regex across text files. If PigeonGraph returns 0 results: run \`pigeongraph index\` in the repo root, retry once, and only then fall back to grep.
 `;
       mkdirSync(dirname(agRulePath), { recursive: true });
       writeFileSync(agRulePath, agRule, 'utf-8');

@@ -12,3 +12,4 @@ When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** bef
 - Efficiency flags: `limit`/`offset` pagination (`next_offset`/`total_matches`), `token_budget` + `include_spans`, `include_semantic`/`include_flows`/`include_dispatches` toggles, and `compact:true` for symbols + query_summary only.
 - Recent anchors auto-record to the working-set; inspect via `pigeongraph_context` (`get`/`clear`).
 - Use `grep` ONLY for raw non-code string literals, comments, or regex across text files.
+- If PigeonGraph returns 0 results: run `pigeongraph index` in the repo root, retry once, and only then fall back to grep.
