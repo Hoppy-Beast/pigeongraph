@@ -3,7 +3,7 @@ import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { SuperGraphMcpServer } from './server.js';
 import { UiServer } from './ui/ui-server.js';
-import { PrAuditor } from './audit/pr-auditor.js';
+import { PrAuditor, buildSarif } from './audit/pr-auditor.js';
 import { AgentInstaller } from './installer/agent-installer.js';
 import { SubstrateDaemon, AstExtractor } from '@pigeongraph/substrate';
 import { ClientGraphStore } from '@pigeongraph/client';
@@ -270,6 +270,7 @@ Press Ctrl+C to stop.
     const headIdx = args.indexOf('--head');
     const headRef = headIdx !== -1 ? args[headIdx + 1] : 'HEAD';
     const isJson = args.includes('--json');
+    const isSarif = args.includes('--sarif');
 
     const { execSync } = await import('node:child_process');
 
@@ -317,7 +318,9 @@ Press Ctrl+C to stop.
       changedFiles,
     });
 
-    if (isJson) {
+    if (isSarif) {
+      console.log(JSON.stringify(buildSarif(auditResult), null, 2));
+    } else if (isJson) {
       console.log(JSON.stringify(auditResult, null, 2));
     } else {
       console.log(auditResult.markdownReport);

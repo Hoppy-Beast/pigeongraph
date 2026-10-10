@@ -17,6 +17,7 @@ export interface SymbolAuditDetail {
   blastRadiusFiles: number;
   blastRadiusSymbols: number;
   summary: string;
+  testOnly?: boolean;
 }
 
 export interface PrAuditOptions {
@@ -40,6 +41,104 @@ export interface PrAuditResult {
   markdownReport: string;
 }
 
+export interface SarifResult {
+  ruleId: string;
+  level: 'error' | 'warning' | 'note' | 'none';
+  message: { text: string };
+  locations: Array<{
+    physicalLocation: { artifactLocation: { uri: string } };
+  }>;
+}
+
+export interface SarifRule {
+  id: string;
+  name: string;
+  shortDescription: { text: string };
+  defaultConfiguration: { level: SarifResult['level'] };
+}
+
+export interface SarifLog {
+  version: '2.1.0';
+  $schema: string;
+  runs: Array<{
+    tool: { driver: { name: string; version: string; rules: SarifRule[] } };
+    results: SarifResult[];
+  }>;
+}
+
+/** True for test-only files: __tests__ dirs, .test./.spec. infixes, test(s)/ dirs. */
+export function isTestFile(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, '/');
+  return (
+    normalized.includes('__tests__') ||
+    normalized.includes('.test.') ||
+    normalized.includes('.spec.') ||
+    normalized.includes('/test/') ||
+    normalized.startsWith('test/') ||
+    normalized.includes('/tests/') ||
+    normalized.startsWith('tests/')
+  );
+}
+
+const SARIF_RULES: SarifRule[] = [
+  {
+    id: 'BREAKING_INTERFACE_CHANGE',
+    name: 'BreakingInterfaceChange',
+    shortDescription: { text: 'Public symbol signature changed in a breaking way' },
+    defaultConfiguration: { level: 'error' },
+  },
+  {
+    id: 'DELETED_SYMBOL',
+    name: 'DeletedSymbol',
+    shortDescription: { text: 'Public symbol removed from the module interface' },
+    defaultConfiguration: { level: 'error' },
+  },
+  {
+    id: 'NEW_SYMBOL',
+    name: 'NewSymbol',
+    shortDescription: { text: 'Newly added symbol declaration' },
+    defaultConfiguration: { level: 'warning' },
+  },
+];
+
+/**
+ * Pure SARIF 2.1.0 builder: one result per breaking/deleted finding
+ * (level error) plus one per new symbol (level warning). Safe internal
+ * refactors are not findings and are omitted. Deterministic, no I/O.
+ */
+export function buildSarif(result: PrAuditResult): SarifLog {
+  const results: SarifResult[] = [];
+  for (const d of result.details) {
+    if (d.changeCategory === 'SAFE_INTERNAL_REFACTOR') continue;
+    results.push({
+      ruleId: d.changeCategory,
+      level: d.changeCategory === 'NEW_SYMBOL' ? 'warning' : 'error',
+      message: { text: `${d.qualifiedName}: ${d.summary}` },
+      locations: [
+        {
+          physicalLocation: { artifactLocation: { uri: d.filePath } },
+        },
+      ],
+    });
+  }
+  return {
+    version: '2.1.0',
+    $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+    runs: [
+      {
+        tool: {
+          driver: {
+            name: 'PigeonGraph PR Audit',
+            version: '1.0.0',
+            rules: SARIF_RULES,
+          },
+        },
+        results,
+      },
+    ],
+  };
+}
+
 export class PrAuditor {
   private store: ClientGraphStore | undefined;
   private extractor: AstExtractor;
@@ -57,6 +156,8 @@ export class PrAuditor {
     let deletedSymbols = 0;
 
     for (const file of input.changedFiles) {
+      const testOnly = isTestFile(file.filePath);
+      const prefix = testOnly ? '[test-only] ' : '';
       const oldParse = this.extractor.parseFile({
         repoId: input.repoId,
         filePath: file.filePath,
@@ -89,7 +190,8 @@ export class PrAuditor {
             changeCategory: 'NEW_SYMBOL',
             blastRadiusFiles: 0,
             blastRadiusSymbols: 0,
-            summary: 'Newly added symbol declaration',
+            summary: `${prefix}Newly added symbol declaration`,
+            testOnly,
           });
           continue;
         }
@@ -107,7 +209,8 @@ export class PrAuditor {
               changeCategory: 'SAFE_INTERNAL_REFACTOR',
               blastRadiusFiles: 0,
               blastRadiusSymbols: 0,
-              summary: 'Safe internal refactor: public signature unchanged, 0 external blast radius.',
+              summary: `${prefix}Safe internal refactor: public signature unchanged, 0 external blast radius.`,
+              testOnly,
             });
           } else {
             breakingInterfaceChanges++;
@@ -128,7 +231,8 @@ export class PrAuditor {
               changeCategory: 'BREAKING_INTERFACE_CHANGE',
               blastRadiusFiles,
               blastRadiusSymbols,
-              summary: `Signature Changed: ${newNode.substrate.symbolSignature ?? 'interface modified'}`,
+              summary: `${prefix}Signature Changed: ${newNode.substrate.symbolSignature ?? 'interface modified'}`,
+              testOnly,
             });
           }
         }
@@ -156,15 +260,33 @@ export class PrAuditor {
             changeCategory: 'DELETED_SYMBOL',
             blastRadiusFiles,
             blastRadiusSymbols,
-            summary: 'Symbol removed from public module interface',
+            summary: `${prefix}Symbol removed from public module interface`,
+            testOnly,
           });
         }
       }
     }
 
-    // Determine overall risk
+    // Determine overall risk. CRITICAL when the blast is clearly release-blocking:
+    // >=3 breaking changes, >=2 deletions, or any breaking change fanning out
+    // to >=5 downstream files. HIGH for >=2 breaking changes or a deletion
+    // with downstream blast; otherwise MEDIUM when anything broke, else LOW.
+    const totalBlastFiles = details.reduce(
+      (sum, d) =>
+        sum +
+        (d.changeCategory === 'BREAKING_INTERFACE_CHANGE' || d.changeCategory === 'DELETED_SYMBOL'
+          ? d.blastRadiusFiles
+          : 0),
+      0
+    );
     let overallRiskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
-    if (breakingInterfaceChanges >= 3 || deletedSymbols >= 2) {
+    if (
+      breakingInterfaceChanges >= 3 ||
+      deletedSymbols >= 2 ||
+      (breakingInterfaceChanges >= 1 && totalBlastFiles >= 5)
+    ) {
+      overallRiskLevel = 'CRITICAL';
+    } else if (breakingInterfaceChanges >= 2 || (deletedSymbols >= 1 && totalBlastFiles > 0)) {
       overallRiskLevel = 'HIGH';
     } else if (breakingInterfaceChanges > 0 || deletedSymbols > 0) {
       overallRiskLevel = 'MEDIUM';
@@ -222,7 +344,8 @@ export class PrAuditor {
           : '✨ **New Symbol**';
 
       const blast = d.blastRadiusFiles > 0 ? `${d.blastRadiusFiles} files (${d.blastRadiusSymbols} symbols)` : '0 files';
-      tableRows += `| \`${d.qualifiedName}\` | \`${d.filePath}\` | ${typeBadge} | ${blast} | ${d.summary} |\n`;
+      const testBadge = d.testOnly ? '🧪 test-only' : '—';
+      tableRows += `| \`${d.qualifiedName}\` | \`${d.filePath}\` | ${typeBadge} | ${blast} | ${testBadge} | ${d.summary} |\n`;
     }
 
     return `### 🐦 PigeonGraph PR Blast Radius Audit
@@ -232,9 +355,9 @@ export class PrAuditor {
 | ${riskBadge} | **${data.totalFilesChanged}** | **${data.breakingInterfaceChanges}** | **${data.safeInternalRefactors}** |
 
 #### Symbol Impact Breakdown
-| Symbol | File | Change Type | Blast Radius | Downstream Impact |
-| :--- | :--- | :---: | :---: | :--- |
-${tableRows || '| - | - | No symbol changes detected | 0 files | - |\n'}
+| Symbol | File | Change Type | Blast Radius | Test | Downstream Impact |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+${tableRows || '| - | - | No symbol changes detected | 0 files | — | - |\n'}
 > **PigeonGraph Invariant Hash (H_semantic_inv)** differentiates pure internal refactors from breaking signature alterations at zero token cost.
 `;
   }
