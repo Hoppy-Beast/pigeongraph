@@ -66,7 +66,9 @@ You can run PigeonGraph directly in Google Colab, execute it on a single project
 Run PigeonGraph in any codebase without installing it globally:
 
 ```bash
-# 1. Initialize configuration and editor MCP files (.cursor/mcp.json)
+# 1. Initialize configuration, workspace MCP files, and agent steering rules
+# (.cursor/mcp.json, .mcp.json, .agents/mcp_config.json, AGENTS.md, GEMINI.md,
+#  CLAUDE.md, .cursor/rules/, .gemini/rules/, .agents/rules/)
 npx pigeongraph init
 
 # 2. Index your repository into .pigeongraph/substrate.db
@@ -78,7 +80,10 @@ npx pigeongraph explore "verifyToken"
 # 4. Open the live architecture visualizer
 npx pigeongraph ui
 
-# 5. Optional: Register with global apps (Claude Desktop, Google Antigravity, Gemini)
+# 5. Optional (once per machine): Register global configs
+# (Claude Desktop, Antigravity global ~/.gemini/config/mcp_config.json, Gemini).
+# Workspace Antigravity (.agents/mcp_config.json) is already done by `init`.
+# After this, restart Antigravity and enable PigeonGraph in its MCP manager.
 npx pigeongraph install-mcp --mode npx
 ```
 
@@ -90,10 +95,13 @@ Install the CLI globally to run `pigeongraph` across all repositories:
 # 1. Install globally from npm
 npm install -g pigeongraph
 
-# 2. Initialize project configuration in your repository root
+# 2. Initialize project configuration, workspace MCP files, and steering rules
+# in your repository root (Cursor, Claude Code, and Antigravity workspace
+# configs plus AGENTS.md, GEMINI.md, CLAUDE.md are all written at once)
 pigeongraph init
 
-# 3. Index your codebase
+# 3. Index your codebase (required before first explore, otherwise the
+# graph is empty and agents fall back to grep)
 pigeongraph index
 
 # 4. Query symbols or inspect call chains
@@ -102,7 +110,10 @@ pigeongraph explore "verifyToken"
 # 5. Launch the live architecture visualizer (http://127.0.0.1:5052)
 pigeongraph ui
 
-# 6. Register MCP configuration with your installed coding agents
+# 6. Optional (once per machine): register global MCP configs for apps
+# that don't read workspace files (Claude Desktop, Antigravity global,
+# Gemini CLI). Then restart Antigravity and enable PigeonGraph in its
+# MCP manager.
 pigeongraph install-mcp
 ```
 
@@ -182,9 +193,15 @@ pigeongraph explore "verifyToken"
   "query_summary": {
     "query": "verifyToken",
     "resolved_anchor": "sg://core-backend/src/auth/jwt.ts#verifyToken",
+    "resolved_score": 100,
+    "alternatives": [
+      { "uid": "sg://core-backend/src/auth/jwt.ts#verifyToken", "score": 100 },
+      { "uid": "sg://core-backend/src/auth/session.ts#verifyToken", "score": 62 }
+    ],
     "epistemic_status": "EXACT",
     "total_graph_nodes_searched": 413,
-    "duration_ms": 0.63
+    "duration_ms": 0.63,
+    "cached": false
   },
   "symbols": [
     {
@@ -232,11 +249,24 @@ pigeongraph explore "verifyToken"
       "content": "export async function verifyToken(token: string): Promise<UserSession> {\n  const key = await getKey();\n  return jwt.verify(token, key);\n}",
       "token_count": 34
     }
+  ],
+  "total_matches": 1,
+  "truncated": false,
+  "next_offset": 1,
+  "semantic_context": [
+    {
+      "uid": "sg://core-backend/src/auth/jwt.ts#verifyToken",
+      "implements_spec": [{ "reqId": "REQ-AUTH-01", "title": "JWT verification" }],
+      "justified_by_adr": [],
+      "confidence": "EXTRACTED"
+    }
   ]
 }
 ```
 
 </details>
+
+`query_summary` reports `resolved_score` (0-100) with the top-3 `alternatives` and a `cached` flag (true on repeat-query cache hit). `total_matches` / `next_offset` page through all matches (`explore --limit/--offset`), `truncated` signals the `token_budget` cut `served_spans`, and `semantic_context` carries Layer 2 spec/ADR links for the anchor when present. When a query matches nothing, the response carries a `hint` telling the agent exactly what to do (run `pigeongraph index`, then retry once) instead of silently falling back to grep.
 
 ---
 
@@ -254,7 +284,7 @@ Architectural comparison against existing code exploration and graph tools:
 | Non-code documents (ADRs, specs) | No (code only) | Yes (PDFs, Whisper, docs) | No (code and markdown only) | Yes (Markdown, RFCs, ADRs, invariants) |
 | Dynamic dispatch (event emitters, routes, React) | Yes | No (name matching only) | Partial (MRO/DI only; lacks events and React) | Yes (EventEmitters, routes, React, MRO) |
 | Flow tracing (`STEP_IN_PROCESS`) | No (ad-hoc search) | No (clusters only) | Yes (scored entry-point BFS flows) | Yes (precomputed sequences) |
-| Agent MCP interface | Single tool (`explore`) | 7 tools | 17 tools | 1 primary (`explore`) with analytical opt-ins |
+| Agent MCP interface | Single tool (`explore`) | 7 tools | 17 tools | `explore` + `impact` / `trace` / `context` memory (`supergraph_explore` alias) |
 | Cross-repository contracts | No (single repo) | Partial (graph merge) | Yes (repo groups) | Yes (contract linkages) |
 | Client memory model | SQLite file | NetworkX (higher memory footprint) | Local Node backend (server required) | In-memory Graphology store |
 | Prompt injection defense | None | Partial (basic tags) | None | Defanged sentinels with `<untrusted_source>` tags |
@@ -270,11 +300,21 @@ PigeonGraph implements the Model Context Protocol (MCP, 2024-11-05 specification
 
 ### Automatic setup
 
-Run the installer to detect installed tools and add the configuration:
+`pigeongraph init` already writes all workspace-local configs (`.cursor/mcp.json`,
+`.mcp.json`, `.agents/mcp_config.json`) plus steering rules (`AGENTS.md`,
+`GEMINI.md`, `CLAUDE.md`, `.cursor/rules/`, `.gemini/rules/`, `.agents/rules/`,
+`.windsurfrules`, Copilot instructions), so anyone cloning the repo gets
+PigeonGraph without extra steps.
+
+Run the installer only once per machine for global app configs that don't read
+workspace files:
 ```bash
 pigeongraph install-mcp
 ```
-This resolves PATH differences on Windows and macOS, and configures permissions for Claude Code.
+This resolves PATH differences on Windows and macOS, writes the global
+Antigravity config (`~/.gemini/config/mcp_config.json`), and configures
+permissions for Claude Code. After running it, restart Antigravity and enable
+PigeonGraph in its MCP manager — otherwise the tool stays registered but unused.
 
 <details>
 <summary><b>Manual configuration paths and templates</b></summary>
@@ -286,7 +326,7 @@ Configuration templates are available in [`templates/mcp/`](templates/mcp/) for 
 | Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json` (Windows)<br>`~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) | [`templates/mcp/claude_desktop_config.json`](templates/mcp/claude_desktop_config.json) |
 | Claude Code | Global: `~/.claude.json`<br>Project: `./.mcp.json` | [`templates/mcp/claude_code_mcp.json`](templates/mcp/claude_code_mcp.json) |
 | Cursor / Windsurf | `.cursor/mcp.json` | [`templates/mcp/cursor_mcp.json`](templates/mcp/cursor_mcp.json) |
-| Google Antigravity | `~/.gemini/config/mcp_config.json` or `~/.gemini/antigravity/mcp_config.json` | [`templates/mcp/antigravity_mcp_config.json`](templates/mcp/antigravity_mcp_config.json) |
+| Google Antigravity | Workspace: `./.agents/mcp_config.json` (auto-created by `init`, travels with the repo)<br>Global: `~/.gemini/config/mcp_config.json` or `~/.gemini/antigravity/mcp_config.json` (via `install-mcp`) | [`templates/mcp/antigravity_mcp_config.json`](templates/mcp/antigravity_mcp_config.json) |
 | Gemini CLI | `~/.gemini/settings.json` | [`templates/mcp/gemini_settings.json`](templates/mcp/gemini_settings.json) |
 | GitHub Copilot (VS Code) | `.vscode/settings.json` | [`templates/mcp/vscode_copilot_settings.json`](templates/mcp/vscode_copilot_settings.json) |
 
@@ -308,9 +348,14 @@ For Claude Code, add `"allow": ["mcp__pigeongraph__*"]` under `permissions` in `
 </details>
 
 <details>
-<summary><b>Agent steering instructions (AGENTS.md, CLAUDE.md, GEMINI.md)</b></summary>
+<summary><b>Agent steering instructions (AGENTS.md, GEMINI.md, CLAUDE.md, .agents/rules/)</b></summary>
 
-Add the following snippet from [`templates/steering/AGENTS.md`](templates/steering/AGENTS.md) to your repository root:
+`pigeongraph init` (or `pigeongraph steer`) injects the snippet from
+[`templates/steering/AGENTS.md`](templates/steering/AGENTS.md) into all of these
+— commit them so every clone inherits the rule with no extra command:
+- `AGENTS.md`, `GEMINI.md` (Antigravity/Gemini read this at workspace root), `CLAUDE.md`
+- `.cursor/rules/pigeongraph.mdc`, `.gemini/rules/pigeongraph.md`, `.agents/rules/pigeongraph.md` (Antigravity-native, `alwaysApply: true`)
+- `.windsurfrules`, `.github/copilot-instructions.md`
 
 ```markdown
 <!-- pigeongraph-guidance -->
@@ -476,16 +521,31 @@ For vulnerability reporting procedures and release support, see the [Security Po
 
 | Command | Description |
 | :--- | :--- |
-| `pigeongraph init` | Generates `.pigeongraph/config.json`, MCP configs, and injects AI agent steering rules (`AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`, etc.) |
+| `pigeongraph init` | Generates `.pigeongraph/config.json`, workspace MCP configs (`.cursor/mcp.json`, `.mcp.json`, `.agents/mcp_config.json`), and injects AI agent steering rules (`AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, `.cursor/rules/`, `.gemini/rules/`, `.agents/rules/`, etc.) |
 | `pigeongraph steer` | Injects/updates AI agent steering rules instructing LLMs to prioritize PigeonGraph over grep |
-| `pigeongraph index` | Build the index (incremental, skips unchanged files) |
+| `pigeongraph index` | Build the index (incremental, skips unchanged files). Run before first `explore` — an empty graph returns 0 results and teaches agents to fall back to grep. |
 | `pigeongraph install-mcp` | Registers MCP server across Claude Desktop, Cursor, Antigravity, and Gemini, and injects agent steering rules |
 | `pigeongraph uninstall-mcp` | Removes MCP server from Claude Desktop and Cursor configurations |
-| `pigeongraph explore <query>` | Runs a single-turn query and prints JSON results to stdout |
+| `pigeongraph explore <query> [--limit <n>] [--offset <n>] [--token-budget <n>] [--no-spans] [--refresh]` | Runs a single-turn query and prints JSON results to stdout (`--limit` default 5, max 20; `--offset` pages via `next_offset`/`total_matches`; `--token-budget` default 800 bounds `served_spans`; `--no-spans` skips source slices) |
 | `pigeongraph ui [--port <num>] [--ws-port <num>]` | Starts the local web visualizer with live WebSocket updates and automatic port fallback |
-| `pigeongraph audit-pr [--base <ref>]` | Compares modified symbols against a base commit using `H_semantic_inv` to estimate blast radius |
+| `pigeongraph audit-pr [--base <ref>] [--head <ref>] [--json] [--sarif]` | Compares modified symbols against a base commit using `H_semantic_inv` to estimate blast radius (risk LOW/MEDIUM/HIGH/CRITICAL with test-only badges; `--json` prints the raw result, `--sarif` emits SARIF 2.1.0 for code scanning) |
 | `pigeongraph serve-mcp` | Starts the stdio JSON-RPC 2.0 MCP server |
 
+
+</details>
+
+<details>
+<summary><b>MCP tool reference (explore, impact, trace, context)</b></summary>
+
+| Tool | Purpose | Key parameters |
+| :--- | :--- | :--- |
+| `pigeongraph_explore` | Single-turn symbol/route/flow lookup (primary tool) | `query` (required), `limit` (default 5, max 20) / `offset`, `token_budget` (default 800) + `include_spans`, `include_semantic` / `include_flows` / `include_dispatches` / `include_blast_radius` toggles, `compact`, `depth`, `symbol_anchor` |
+| `pigeongraph_impact` | Blast radius + dependency risk before refactoring | `target_symbol` (required), `direction` (`upstream` / `downstream` / `both`), `max_depth` |
+| `pigeongraph_trace` | Direct execution path between two symbols | `from_symbol`, `to_symbol` (both required) |
+| `pigeongraph_context` | Observational working-set memory digest | `action`: `get` (recent anchors, max 10 entries, under 500 tokens) or `clear` |
+| `supergraph_explore` | Backward-compatible alias for `pigeongraph_explore` | Same parameters as `pigeongraph_explore` |
+
+Token-saving knobs: `compact: true` returns only `symbols` + `query_summary` + pagination (skips flows, dispatches, blast radius, spans, `semantic_context`); repeat queries set `cached: true` in `query_summary` via the LRU query cache (invalidated on index epoch bump). Setting `PIGEONGRAPH_LAZY_SPANS=1` skips span disk reads entirely (`served_spans: []`).
 
 </details>
 
@@ -587,6 +647,17 @@ Run `pigeongraph install-mcp`. The command finds your local Claude Desktop confi
 </details>
 
 <details>
+<summary><b>Antigravity is not using PigeonGraph — how do I fix it?</b></summary>
+
+Checklist, in order:
+1. `pigeongraph init && pigeongraph index` in the repo root — `init` writes the workspace config (`.agents/mcp_config.json`) and rules (`.agents/rules/`, `GEMINI.md`); `index` fills the graph so the first query isn't empty.
+2. `pigeongraph install-mcp` once per machine for the global config (`~/.gemini/config/mcp_config.json`).
+3. Restart Antigravity and enable PigeonGraph in its MCP manager — registration alone doesn't activate the tool.
+4. If the agent still greps, confirm `.agents/mcp_config.json` and `GEMINI.md` are committed and present in the opened workspace (Antigravity reads workspace files, not `.gemini/rules/` alone).
+
+</details>
+
+<details>
 <summary><b>Why does PowerShell show a path error with /pigeongraph?</b></summary>
 
 In PowerShell, a leading slash is treated as a filesystem root path. Run `pigeongraph explore ...` or `npx pigeongraph explore ...` without the leading slash.
@@ -621,6 +692,34 @@ By default, standard build and dependency directories (`node_modules`, `.git`, `
 
 </details>
 
+<details>
+<summary><b>How do I keep explore responses small (compact mode)?</b></summary>
+
+Pass `compact: true` to `pigeongraph_explore` (MCP) to get only `symbols` + `query_summary` + `total_matches`/`next_offset` — flows, dispatches, blast radius, spans, and `semantic_context` are skipped. For finer control, keep individual toggles: `include_semantic` / `include_flows` / `include_dispatches` / `include_blast_radius` / `include_spans`, plus `limit`/`offset` pagination and `token_budget` (default 800) to bound `served_spans`. Repeat queries are served from the LRU query cache (`cached: true` in `query_summary`).
+
+</details>
+
+<details>
+<summary><b>What does PIGEONGRAPH_LAZY_SPANS=1 do?</b></summary>
+
+It defers span disk reads during exploration: `served_spans` returns empty (`[]`, `truncated: false`) so queries stay non-blocking and token-light when you only need symbols, flows, and blast radius. Unset it (default) to get real source slices back.
+
+</details>
+
+<details>
+<summary><b>Explore returned 0 results — what should the agent do?</b></summary>
+
+Don't fall back to grep yet. The response carries a `hint`: an empty graph means run `pigeongraph index` in the repo root, then retry; a no-match means check spelling, try a route path (e.g. `/api/login`), or re-index if the graph is stale. Steering rules encode this as retry-once: run `pigeongraph index`, retry the query once, and only then grep (grep stays correct for raw string literals and non-code text).
+
+</details>
+
+<details>
+<summary><b>Why does a fresh clone work with Antigravity without extra setup?</b></summary>
+
+The workspace files `.agents/mcp_config.json` (portable `npx` command, no machine-specific paths) and `.agents/rules/pigeongraph.md` (`alwaysApply: true`) are committed to the repo, so cloning is enough — Antigravity picks up both automatically. `install-mcp` is only needed once per machine for global app configs (see the Antigravity troubleshooting entry above).
+
+</details>
+
 ---
 
 ## Contributing with AGENTS.md
@@ -630,7 +729,7 @@ We welcome contributions, bug fixes, and feature discussions. Whether you are co
 <details>
 <summary><b>Working with an AI coding agent</b></summary>
 
-If you use Claude Code, Google Antigravity, Cursor, Gemini CLI, or GitHub Copilot, point your agent to [`AGENTS.md`](AGENTS.md) in the repository root:
+If you use Claude Code, Google Antigravity, Cursor, Gemini CLI, or GitHub Copilot, point your agent to [`AGENTS.md`](AGENTS.md) (or [`GEMINI.md`](GEMINI.md) for Antigravity/Gemini) in the repository root:
 - It describes the package layout, dependency flow, and core invariants (clean-room MIT licensing, zero-token AST extraction, and invariant hash rules).
 - It instructs agents to use `pigeongraph explore "<query>"` to locate symbols and call paths before editing files.
 - You can tell your agent:

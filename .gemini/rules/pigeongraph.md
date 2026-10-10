@@ -22,4 +22,10 @@ When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** bef
 - Searching for raw non-code string literals (e.g., specific error messages, CSS classes, UI copy, regex patterns in .env/markdown).
 - Searching for regex patterns across non-code files.
 - PigeonGraph returned 0 results for a symbol.
+- If PigeonGraph returns 0 results: run `pigeongraph index` in the repo root, retry the query once, and only then fall back to grep.
+
+#### 4. Efficiency flags + working-set memory:
+- `pigeongraph_explore` supports `limit`/`offset` pagination (`next_offset`/`total_matches`), `token_budget` + `include_spans` for bounded source slices, `include_semantic`/`include_flows`/`include_dispatches`/`include_blast_radius` toggles, and `compact:true` for symbols + `query_summary` + pagination only (skips flows/dispatches/blast_radius/spans/`semantic_context`).
+- `query_summary` carries `resolved_anchor`/`resolved_score`/`alternatives`/`cached`; `semantic_context` carries Layer 2 spec/ADR links when present.
+- Recent anchors auto-record to the observational working-set; inspect via `pigeongraph_context` (`get` returns max 10 entries, <500 tokens; `clear` empties). Explore never short-circuits on memory.
 <!-- /pigeongraph-guidance -->
