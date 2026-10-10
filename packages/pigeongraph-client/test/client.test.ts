@@ -715,4 +715,66 @@ describe('Client Execution Layer & Query Surface Tests', () => {
     // ~500 tokens ≈ 2000 chars; compact must stay well under.
     assert.ok(compactJson.length < 2000, `compact JSON small (got ${compactJson.length} chars)`);
   });
+
+  test('Task 4.2: PIGEONGRAPH_LAZY_SPANS=1 defers span reads (no disk I/O)', () => {
+    const lazyStore = new ClientGraphStore();
+    const lazyReconciler = new DualBufferReconciler(lazyStore);
+    const lazyNode: SuperNode = {
+      id: 'sg://app/src/lazy/widget.ts#lazyWidget',
+      urn: 'urn:test:lazyWidget',
+      kind: 'function',
+      name: 'lazyWidget',
+      qualifiedName: 'lazyWidget',
+      repoId: 'app',
+      versioning: {
+        lamportClock: 1,
+        vectorClock: { daemon: 1 },
+        layerEpochs: { substrateEpoch: 1, semanticEpoch: 0, processEpoch: 0 },
+        contentSha256: '0'.repeat(64),
+        astStructuralHash: '0'.repeat(64),
+        semanticValidityHash: '0'.repeat(64),
+      },
+      substrate: {
+        sourceLocation: { filePath: 'src/lazy/widget.ts', startLine: 1, startColumn: 0, endLine: 20, endColumn: 1 },
+        language: 'typescript',
+        symbolSignature: 'export function lazyWidget()',
+        outgoingEdges: [],
+        astEpochTimestamp: new Date().toISOString(),
+      },
+      semantic: { validityStatus: 'VALID', communityClusters: [], semanticEmbeddings: [] },
+      processFlow: { isEntryPoint: false, entryPointScore: 0.1, processFlowSequences: [], crossRepoContracts: [] },
+    };
+    lazyReconciler.applySubstrateDelta({
+      protocolVersion: 1,
+      epochId: 1,
+      transactionId: 'tx-4-2-lazy',
+      vectorClock: { daemon: 1 },
+      timestampMs: Date.now(),
+      projectRoot: '/test',
+      reconcileMode: 'delta',
+      mutations: [{ type: 'NodeUpsert', node: lazyNode }],
+    });
+
+    const prev = process.env.PIGEONGRAPH_LAZY_SPANS;
+    try {
+      // Baseline (no env): spans served (placeholder when file missing on disk).
+      delete process.env.PIGEONGRAPH_LAZY_SPANS;
+      const eager = new SuperGraphExploreEngine(lazyStore);
+      const eagerRes = eager.explore({ query: 'lazyWidget', symbol_anchor: lazyNode.id });
+      assert.ok(eagerRes.served_spans.length >= 1, 'eager mode must serve spans');
+      assert.equal(eagerRes.truncated, false);
+
+      // Lazy mode: skip disk reads entirely — empty spans, truncated false.
+      process.env.PIGEONGRAPH_LAZY_SPANS = '1';
+      const lazy = new SuperGraphExploreEngine(lazyStore);
+      const lazyRes = lazy.explore({ query: 'lazyWidget', symbol_anchor: lazyNode.id });
+      assert.deepEqual(lazyRes.served_spans, []);
+      assert.equal(lazyRes.truncated, false);
+      // Non-span sections unaffected.
+      assert.ok(lazyRes.symbols.length >= 1);
+    } finally {
+      if (prev === undefined) delete process.env.PIGEONGRAPH_LAZY_SPANS;
+      else process.env.PIGEONGRAPH_LAZY_SPANS = prev;
+    }
+  });
 });

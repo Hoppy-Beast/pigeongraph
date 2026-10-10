@@ -150,6 +150,11 @@ export class SuperGraphExploreEngine {
     this.cache = opts?.cache;
   }
 
+  /** Task 4.2: PIGEONGRAPH_LAZY_SPANS=1 defers span disk reads (non-blocking explore). */
+  private isLazySpans(): boolean {
+    return process.env.PIGEONGRAPH_LAZY_SPANS === '1';
+  }
+
   public explore(input: ExploreQueryInput): ExploreQueryResponse {
     const start = performance.now();
     const epoch = this.store.getActiveEpoch();
@@ -160,8 +165,11 @@ export class SuperGraphExploreEngine {
       const hit = this.cache.get(cacheKey);
       if (hit) {
         const freshDuration = performance.now() - start;
+        // Task 4.2: lazy mode strips cached spans too (no stale disk content).
+        const lazy = this.isLazySpans();
         return {
           ...hit.response,
+          ...(lazy ? { served_spans: [], truncated: false } : {}),
           query_summary: {
             ...hit.response.query_summary,
             duration_ms: Number(freshDuration.toFixed(2)),
@@ -457,7 +465,9 @@ export class SuperGraphExploreEngine {
     }
 
     // 6. Served Spans (real source slices via span-fetcher; compact skips)
-    const includeSpans = input.compact !== true && input.include_spans !== false;
+    // Task 4.2: PIGEONGRAPH_LAZY_SPANS=1 skips fetchSpans entirely (defers disk reads).
+    const lazySpans = this.isLazySpans();
+    const includeSpans = input.compact !== true && input.include_spans !== false && !lazySpans;
     const tokenBudget = input.token_budget ?? 800;
     const effectiveRoot = input.projectRoot ?? this.projectRoot;
     let servedSpans: ExploreQueryResponse['served_spans'] = [];

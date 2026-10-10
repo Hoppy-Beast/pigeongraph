@@ -76,8 +76,11 @@ export class SemanticWorker {
     const loop = async () => {
       if (!this.isRunning) return;
 
-      const job = this.queue.dequeue();
-      if (job) {
+      // Task 4.2: drain up to 20 jobs per tick (priority-ordered batch).
+      // Still non-blocking: sequential awaits + setTimeout yield, no threading change.
+      const batch = this.queue.dequeueBatch(20);
+      for (const job of batch) {
+        if (!this.isRunning) break;
         await this.processJob(job);
       }
 

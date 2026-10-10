@@ -71,6 +71,67 @@ describe('Semantic Worker Layer Engine Tests', () => {
     assert.equal(job3, null);
   });
 
+  test('Task 4.2: dequeueBatch(20) returns priority-ordered batches', () => {
+    const batchQueue = new SQLiteSemanticQueue(':memory:');
+    try {
+      // Enqueue 25 jobs with mixed priorities: 5x P0, 10x P1, 5x P2, 5x P3.
+      const specs: Array<{ filePath: string; priority: 0 | 1 | 2 | 3 }> = [];
+      for (let i = 0; i < 5; i++) specs.push({ filePath: `src/p0_${i}.ts`, priority: 0 });
+      for (let i = 0; i < 10; i++) specs.push({ filePath: `src/p1_${i}.ts`, priority: 1 });
+      for (let i = 0; i < 5; i++) specs.push({ filePath: `src/p2_${i}.ts`, priority: 2 });
+      for (let i = 0; i < 5; i++) specs.push({ filePath: `src/p3_${i}.ts`, priority: 3 });
+      // Interleave enqueue order so priority sorting is exercised (not insertion order).
+      const interleaved = [
+        ...specs.filter((s) => s.priority === 3),
+        ...specs.filter((s) => s.priority === 1).slice(0, 5),
+        ...specs.filter((s) => s.priority === 0),
+        ...specs.filter((s) => s.priority === 2),
+        ...specs.filter((s) => s.priority === 1).slice(5),
+      ];
+      assert.equal(interleaved.length, 25);
+      interleaved.forEach((s, idx) => {
+        batchQueue.enqueue({
+          filePath: s.filePath,
+          contentHash: `hash_${s.filePath}`,
+          priority: s.priority,
+          epoch: idx + 1,
+          jobType: 'AST_FOCUS_DIFF',
+        });
+      });
+
+      assert.equal(batchQueue.getPendingCount(), 25);
+
+      const batch = batchQueue.dequeueBatch(20);
+      assert.equal(batch.length, 20);
+      // Priority-ordered ascending: all P0 first, then P1, then P2.
+      const prios = batch.map((j) => j.priority);
+      const sorted = [...prios].sort((a, b) => a - b);
+      assert.deepEqual(prios, sorted);
+      assert.equal(prios.filter((p) => p === 0).length, 5);
+      assert.equal(prios.filter((p) => p === 1).length, 10);
+      assert.equal(prios.filter((p) => p === 2).length, 5);
+      assert.equal(prios.filter((p) => p === 3).length, 0);
+      // Claimed jobs are RUNNING, so pending drops to 5.
+      assert.equal(batchQueue.getPendingCount(), 5);
+      for (const j of batch) assert.equal(j.status, 'RUNNING');
+
+      // dequeue() delegates to batch(1): next must be P2 or P3 remainder.
+      const single = batchQueue.dequeue();
+      assert.ok(single);
+      // Remaining are 5x P3 (P2 fully drained above), so next is P3.
+      assert.equal(single.priority, 3);
+
+      const rest = batchQueue.dequeueBatch(20);
+      assert.equal(rest.length, 4);
+      assert.equal(batchQueue.getPendingCount(), 0);
+      // Default limit is 20.
+      const empty = batchQueue.dequeueBatch();
+      assert.deepEqual(empty, []);
+    } finally {
+      batchQueue.close();
+    }
+  });
+
   test('PromptDefanger neutralizes LLM injection sentinels and wraps untrusted source', () => {
     const maliciousDoc = `
       # Normal Heading

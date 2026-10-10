@@ -116,25 +116,53 @@ export class SQLiteSemanticQueue {
   }
 
   public dequeue(): SemanticJob | null {
-    const now = Date.now();
-    const row = this.db.prepare(`
+    return this.dequeueBatch(1)[0] ?? null;
+  }
+
+  /**
+   * Task 4.2: batch dequeue (default 20) by priority.
+   * Single SELECT ... ORDER BY priority ASC, created_at_ms ASC LIMIT ?
+   * then marks each RUNNING in one transaction-ish loop. Non-blocking:
+   * bounded batch keeps the worker poll loop and serve-mcp responsive.
+   */
+  public dequeueBatch(limit = 20): SemanticJob[] {
+    const n = Math.floor(limit);
+    if (!Number.isFinite(n) || n <= 0) return [];
+    const rows = this.db.prepare(`
       SELECT * FROM semantic_jobs
       WHERE status = 'PENDING'
       ORDER BY priority ASC, created_at_ms ASC
-      LIMIT 1
-    `).get() as Record<string, unknown> | undefined;
+      LIMIT ?
+    `).all(n) as Array<Record<string, unknown>>;
+    if (rows.length === 0) return [];
 
-    if (!row) return null;
-
-    const id = row.id as string;
-    this.db.prepare(`
+    const now = Date.now();
+    const update = this.db.prepare(`
       UPDATE semantic_jobs
       SET status = 'RUNNING', updated_at_ms = ?
       WHERE id = ?
-    `).run(now, id);
+    `);
+    let inTx = false;
+    try {
+      this.db.exec('BEGIN IMMEDIATE');
+      inTx = true;
+    } catch {
+      inTx = false;
+    }
+    try {
+      for (const row of rows) {
+        update.run(now, row.id as string);
+      }
+      if (inTx) this.db.exec('COMMIT');
+    } catch (err) {
+      if (inTx) {
+        try { this.db.exec('ROLLBACK'); } catch { /* ignore */ }
+      }
+      throw err;
+    }
 
-    return {
-      id,
+    return rows.map((row) => ({
+      id: row.id as string,
       jobKey: row.job_key as string,
       filePath: row.file_path as string,
       contentHash: row.content_hash as string,
@@ -142,11 +170,11 @@ export class SQLiteSemanticQueue {
       epoch: row.epoch as number,
       jobType: row.job_type as string,
       payloadJson: row.payload_json as string,
-      status: 'RUNNING',
+      status: 'RUNNING' as JobStatus,
       retryCount: row.retry_count as number,
       createdAtMs: row.created_at_ms as number,
       updatedAtMs: now,
-    };
+    }));
   }
 
   public complete(jobId: string): void {
