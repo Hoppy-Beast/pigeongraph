@@ -140,6 +140,23 @@ export function getViewerHtml(wsPort = 5051): string {
       border-color: rgba(6, 182, 212, 0.5);
       font-weight: 600;
     }
+    #direction-toggle {
+      background: #0f172a;
+      border: 1px solid var(--panel-border);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      outline: none;
+    }
+    #direction-toggle:focus { border-color: var(--cyan); color: var(--text); }
+    .connection-pill.flow-highlight {
+      border-color: rgba(6, 182, 212, 0.6);
+      color: var(--cyan-bright);
+      background: rgba(6, 182, 212, 0.08);
+    }
 
     .stats {
       display: flex;
@@ -547,6 +564,11 @@ export function getViewerHtml(wsPort = 5051): string {
         <button class="filter-btn" data-kind="function">Functions</button>
         <button class="filter-btn" data-kind="route">Routes</button>
       </div>
+      <select id="direction-toggle" title="Flow direction filter">
+        <option value="both" selected>Both directions</option>
+        <option value="upstream">Upstream</option>
+        <option value="downstream">Downstream</option>
+      </select>
     </div>
 
     <div class="stats">
@@ -584,7 +606,7 @@ export function getViewerHtml(wsPort = 5051): string {
       <div class="legend-item"><span class="legend-color" style="background:#f59e0b;"></span> File Hub</div>
     </div>
     <div class="legend-tip">
-      Scroll: Zoom &nbsp;|&nbsp; Drag: Pan/Move Node &nbsp;|&nbsp; Click: Inspect &nbsp;|&nbsp; F: Fit
+      Scroll: Zoom &nbsp;|&nbsp; Drag: Pan/Move Node &nbsp;|&nbsp; Click: Inspect flow path &nbsp;|&nbsp; F: Fit
     </div>
   </div>
 
@@ -691,6 +713,45 @@ export function getViewerHtml(wsPort = 5051): string {
     let hoveredNode = null;
     let searchQuery = '';
     let selectedKind = 'all';
+    let flowDirection = 'both';
+    // flowPath holds the transitive upstream+downstream closure of the
+    // selected node (flow path highlight). Recomputed on click only so the
+    // 60fps canvas render loop stays allocation-light.
+    const flowPath = new Set();
+
+    // Compute the full flow path: transitive upstream callers plus
+    // downstream callees of nodeId via BFS over directed edges.
+    function computeFlowPath(nodeId) {
+      flowPath.clear();
+      if (!nodeId || !nodes.has(nodeId)) return flowPath;
+      const fwd = new Set([nodeId]);
+      const fwdQ = [nodeId];
+      while (fwdQ.length > 0) {
+        const cur = fwdQ.pop();
+        for (const e of edges) {
+          if (e.source === cur && !fwd.has(e.target)) { fwd.add(e.target); fwdQ.push(e.target); }
+        }
+      }
+      const bwd = new Set([nodeId]);
+      const bwdQ = [nodeId];
+      while (bwdQ.length > 0) {
+        const cur = bwdQ.pop();
+        for (const e of edges) {
+          if (e.target === cur && !bwd.has(e.source)) { bwd.add(e.source); bwdQ.push(e.source); }
+        }
+      }
+      fwd.forEach(id => flowPath.add(id));
+      bwd.forEach(id => flowPath.add(id));
+      return flowPath;
+    }
+
+    // Human-readable risk breakdown tooltip (why score).
+    function formatRiskTooltip(n) {
+      const rb = n.riskBreakdown;
+      if (!rb) return '';
+      return 'risk breakdown: score ' + rb.score + ' (' + rb.level + ') — nodes:' + rb.nodes +
+        ' files:' + rb.files + ' exported:' + rb.exported + ' entries:' + rb.entries;
+    }
 
     // Camera
     let panX = width / 2;
@@ -817,11 +878,22 @@ export function getViewerHtml(wsPort = 5051): string {
       }
     }
 
-    // Load initial graph snapshot
-    async function loadSnapshot() {
+    // Load initial graph snapshot (supports ?direction= + ?focus= filters)
+    async function loadSnapshot(direction, focus) {
       try {
-        const res = await fetch('/api/graph');
+        const dir = direction || flowDirection || 'both';
+        let url = '/api/graph?direction=' + encodeURIComponent(dir);
+        const focusId = focus || (selectedNode ? selectedNode.id : null);
+        if (focusId) url += '&focus=' + encodeURIComponent(focusId);
+        const res = await fetch(url);
         const data = await res.json();
+
+        // Filtered reload replaces the visible set so upstream/downstream
+        // subsets do not accumulate stale nodes. Live WS upserts merge after.
+        nodes.clear();
+        edges.length = 0;
+        edgeSet.clear();
+        fileNodeMap.clear();
 
         if (data.nodes) {
           // Pre-populate file nodes first
@@ -847,6 +919,17 @@ export function getViewerHtml(wsPort = 5051): string {
         updatePackageClusters();
         updateCounts();
         reheat(1.0);
+
+        // Re-resolve selection after a filtered reload; refresh flow path.
+        if (selectedNode) {
+          const fresh = nodes.get(selectedNode.id);
+          if (fresh) {
+            selectedNode = fresh;
+            computeFlowPath(selectedNode.id);
+          } else {
+            flowPath.clear();
+          }
+        }
 
         // Frame graph automatically
         setTimeout(() => {
@@ -1157,12 +1240,17 @@ export function getViewerHtml(wsPort = 5051): string {
         }
 
         const isIncident = activeNode && (s.id === activeNode.id || t.id === activeNode.id);
+        const isFlowEdge = flowPath.size > 0 && flowPath.has(s.id) && flowPath.has(t.id);
 
         if (activeNode) {
           if (isIncident) {
             ctx.strokeStyle = s.id === activeNode.id ? '#06b6d4' : '#a855f7';
             ctx.lineWidth = 2.5;
             ctx.globalAlpha = 0.9;
+          } else if (isFlowEdge) {
+            ctx.strokeStyle = 'rgba(34, 211, 238, 0.5)';
+            ctx.lineWidth = 1.6;
+            ctx.globalAlpha = 0.65;
           } else {
             ctx.strokeStyle = '#334155';
             ctx.lineWidth = 0.7;
@@ -1235,6 +1323,15 @@ export function getViewerHtml(wsPort = 5051): string {
           ctx.arc(n.x, n.y, n.radius + (isSelected ? 6 : 4), 0, Math.PI * 2);
           ctx.fillStyle = isSelected ? 'rgba(6, 182, 212, 0.3)' : 'rgba(255, 255, 255, 0.2)';
           ctx.fill();
+        }
+
+        // Flow path highlight: transitive upstream+downstream closure ring
+        if (flowPath.size > 0 && flowPath.has(n.id) && !isSelected) {
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, n.radius + 3, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(34, 211, 238, 0.55)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
         }
 
         // Node Circle Core
@@ -1339,7 +1436,9 @@ export function getViewerHtml(wsPort = 5051): string {
           tooltip.style.display = 'block';
           tooltip.style.left = (e.clientX + 14) + 'px';
           tooltip.style.top = (e.clientY - 12) + 'px';
-          tooltip.innerHTML = '<span style="color:' + getNodeColor(hit.kind) + '">[' + hit.kind.toUpperCase() + ']</span> ' + hit.name;
+          tooltip.innerHTML = '<span style="color:' + getNodeColor(hit.kind) + '">[' + hit.kind.toUpperCase() + ']</span> ' + hit.name +
+            '<br><span style="color:var(--text-muted); font-size:10px;">' + formatRiskTooltip(hit) + '</span>';
+          tooltip.title = formatRiskTooltip(hit);
         } else {
           tooltip.style.display = 'none';
         }
@@ -1367,9 +1466,10 @@ export function getViewerHtml(wsPort = 5051): string {
       zoom = newZoom;
     }, { passive: false });
 
-    // Select & Populate Node Details
+    // Select & Populate Node Details + flow path highlight
     function selectNode(n) {
       selectedNode = n;
+      computeFlowPath(n.id);
       const drawer = document.getElementById('drawer');
       drawer.classList.remove('collapsed');
 
@@ -1394,7 +1494,7 @@ export function getViewerHtml(wsPort = 5051): string {
         outgoing.forEach(e => {
           const target = nodes.get(e.target);
           const item = document.createElement('div');
-          item.className = 'connection-pill';
+          item.className = 'connection-pill' + (flowPath.has(e.target) ? ' flow-highlight' : '');
           const targetName = target ? target.name : e.target.split('#').pop() || e.target;
           item.innerHTML = '<span>' + targetName + '</span><span class="connection-tag">' + e.kind + '</span>';
           if (target) {
@@ -1419,7 +1519,7 @@ export function getViewerHtml(wsPort = 5051): string {
         incoming.forEach(e => {
           const source = nodes.get(e.source);
           const item = document.createElement('div');
-          item.className = 'connection-pill';
+          item.className = 'connection-pill' + (flowPath.has(e.source) ? ' flow-highlight' : '');
           const srcName = source ? source.name : e.source.split('#').pop() || e.source;
           item.innerHTML = '<span>' + srcName + '</span><span class="connection-tag">' + e.kind + '</span>';
           if (source) {
@@ -1438,6 +1538,7 @@ export function getViewerHtml(wsPort = 5051): string {
     document.getElementById('d-close').addEventListener('click', () => {
       document.getElementById('drawer').classList.add('collapsed');
       selectedNode = null;
+      flowPath.clear();
     });
 
     document.getElementById('btn-focus-node').addEventListener('click', () => {
@@ -1492,6 +1593,12 @@ export function getViewerHtml(wsPort = 5051): string {
       }
     });
 
+    // Direction toggle: reloads /api/graph?direction= with optional focus
+    document.getElementById('direction-toggle').addEventListener('change', (e) => {
+      flowDirection = e.target.value;
+      loadSnapshot(flowDirection);
+    });
+
     // Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT') return;
@@ -1501,6 +1608,7 @@ export function getViewerHtml(wsPort = 5051): string {
       } else if (e.key === 'Escape') {
         document.getElementById('drawer').classList.add('collapsed');
         selectedNode = null;
+        flowPath.clear();
       } else if (e.key === '+' || e.key === '=') {
         zoom = Math.min(zoom * 1.25, 4.0);
       } else if (e.key === '-' || e.key === '_') {
@@ -1516,7 +1624,7 @@ export function getViewerHtml(wsPort = 5051): string {
     });
 
     // Boot
-    loadSnapshot();
+    loadSnapshot(flowDirection);
     connectWs();
     render();
   </script>

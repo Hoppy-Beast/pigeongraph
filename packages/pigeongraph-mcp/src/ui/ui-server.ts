@@ -2,11 +2,67 @@ import { createServer, type Server } from 'node:http';
 import { getViewerHtml } from './viewer-html.js';
 import type { ClientGraphStore } from '@pigeongraph/client';
 import type { SubstrateDatabase } from '@pigeongraph/substrate';
+// mcp -> client is the allowed dependency direction, so importing the shared
+// risk scorer keeps UI scores identical to explore/analytical tools.
+import { computeRisk } from '@pigeongraph/client';
+import type { SuperNode } from '@pigeongraph/schema';
 
 export interface UiServerOptions {
   store?: ClientGraphStore;
   db?: SubstrateDatabase;
   wsPort?: number;
+}
+
+export interface RiskBreakdown {
+  score: number;
+  level: string;
+  nodes: number;
+  files: number;
+  exported: number;
+  entries: number;
+}
+
+function toRiskBreakdown(node: SuperNode): RiskBreakdown {
+  const { score, level } = computeRisk([node]);
+  const filePath = node.substrate?.sourceLocation?.filePath;
+  const exported =
+    node.substrate?.modifiers?.includes('exported') || node.substrate?.visibility === 'public' ? 1 : 0;
+  const entries = node.processFlow?.isEntryPoint ? 1 : 0;
+  return { score, level, nodes: 1, files: filePath ? 1 : 0, exported, entries };
+}
+
+type FlowDirection = 'upstream' | 'downstream' | 'both';
+
+function parseDirection(raw: string | null): FlowDirection {
+  if (raw === 'upstream' || raw === 'downstream' || raw === 'both') return raw;
+  return 'both';
+}
+
+function filterByDirection(
+  nodeIds: Set<string>,
+  edges: Array<{ source: string; target: string; kind: string }>,
+  direction: FlowDirection,
+  focus: string | null,
+): Set<string> {
+  if (!focus || direction === 'both' || !nodeIds.has(focus)) {
+    if (focus && !nodeIds.has(focus)) return new Set();
+    return nodeIds;
+  }
+  const visited = new Set<string>([focus]);
+  const queue: string[] = [focus];
+  while (queue.length > 0) {
+    const cur = queue.pop() as string;
+    for (const e of edges) {
+      if (direction === 'upstream' && e.target === cur && !visited.has(e.source)) {
+        visited.add(e.source);
+        queue.push(e.source);
+      } else if (direction === 'downstream' && e.source === cur && !visited.has(e.target)) {
+        visited.add(e.target);
+        queue.push(e.target);
+      }
+    }
+  }
+  return visited;
 }
 
 export class UiServer {
@@ -46,7 +102,14 @@ export class UiServer {
           }
         }
 
-        const lightweightNodes = nodes.map((node) => ({
+        const direction = parseDirection(url.searchParams.get('direction'));
+        const focus = url.searchParams.get('focus');
+        const allIds = new Set(nodes.map((n) => n.id));
+        const visibleIds = filterByDirection(allIds, edges, direction, focus);
+        const filteredNodes = nodes.filter((n) => visibleIds.has(n.id));
+        const filteredEdges = edges.filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target));
+
+        const lightweightNodes = filteredNodes.map((node) => ({
           id: node.id,
           name: node.name,
           kind: node.kind,
@@ -60,10 +123,11 @@ export class UiServer {
           versioning: {
             semanticValidityHash: node.versioning?.semanticValidityHash,
           },
+          riskBreakdown: toRiskBreakdown(node),
         }));
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ nodes: lightweightNodes, edges }));
+        res.end(JSON.stringify({ nodes: lightweightNodes, edges: filteredEdges }));
         return;
       }
 
