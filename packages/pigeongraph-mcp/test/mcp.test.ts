@@ -81,6 +81,68 @@ describe('PigeonGraph MCP Server Protocol Tests', () => {
     assert.ok(exploreTool.inputSchema.properties.query);
   });
 
+  test('tools/list documents pagination, compact, semantic context, and working-set (task 5.2)', () => {
+    const listReq = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 20,
+      method: 'tools/list',
+    });
+    const resp = server.handleJsonRpcMessage(listReq);
+    assert.ok(resp);
+    const parsed = JSON.parse(resp);
+    const tools = parsed.result.tools;
+    const exploreTool = tools.find((t: any) => t.name === 'pigeongraph_explore');
+    assert.ok(exploreTool);
+
+    // New params present (no new required fields).
+    const props = exploreTool.inputSchema.properties;
+    for (const name of [
+      'limit',
+      'offset',
+      'token_budget',
+      'include_spans',
+      'include_semantic',
+      'include_flows',
+      'include_dispatches',
+      'compact',
+    ]) {
+      assert.ok(props[name], `expected property ${name}`);
+      assert.ok(
+        typeof props[name].description === 'string' && props[name].description.length > 0,
+        `expected description for ${name}`
+      );
+    }
+    assert.deepEqual(exploreTool.inputSchema.required, ['query']);
+
+    // Top-level description documents steering-relevant behavior.
+    const desc: string = exploreTool.description;
+    for (const keyword of [
+      'limit',
+      'offset',
+      'token_budget',
+      'compact',
+      'semantic_context',
+      'resolved_score',
+      'alternatives',
+      'cached',
+      'pigeongraph_context',
+    ]) {
+      assert.ok(
+        desc.includes(keyword),
+        `expected explore description to mention ${keyword}`
+      );
+    }
+    // PigeonGraph-first rule preserved.
+    assert.ok(desc.includes('grep'));
+
+    // pigeongraph_context documented as observational working-set memory.
+    const ctxTool = tools.find((t: any) => t.name === 'pigeongraph_context');
+    assert.ok(ctxTool);
+    assert.ok(ctxTool.description.includes('working-set'));
+    assert.ok(ctxTool.description.includes('get'));
+    assert.ok(ctxTool.description.includes('clear'));
+  });
+
   test('MCP server executes tools/call for pigeongraph_explore returning valid JSON', () => {
     const callReq = JSON.stringify({
       jsonrpc: '2.0',

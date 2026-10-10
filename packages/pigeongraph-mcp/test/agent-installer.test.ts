@@ -150,4 +150,35 @@ describe('AgentInstaller Tests', () => {
     const matches2 = (content2.match(/<!-- pigeongraph-guidance -->/g) || []).length;
     assert.equal(matches2, 1, 'Should still have exactly 1 guidance block after second run');
   });
+
+  test('steering guidance documents compact mode and working-set context (task 5.2)', () => {
+    const guidance = AgentInstaller.PIGEONGRAPH_STEERING_GUIDANCE;
+    // PigeonGraph-first rule preserved.
+    assert.ok(guidance.includes('ALWAYS call PigeonGraph first'));
+    assert.ok(guidance.includes('grep'));
+    // New efficiency flags + working-set documented.
+    for (const keyword of ['compact', 'pigeongraph_context', 'working-set', 'token_budget', 'limit']) {
+      assert.ok(guidance.includes(keyword), `expected steering guidance to mention ${keyword}`);
+    }
+
+    // templates/steering/AGENTS.md source stays in sync (resolve from cwd upward).
+    const candidates = [
+      join(process.cwd(), 'templates', 'steering', 'AGENTS.md'),
+      join(process.cwd(), '..', '..', 'templates', 'steering', 'AGENTS.md'),
+    ];
+    let templateContent = '';
+    for (const p of candidates) {
+      try {
+        templateContent = readFileSync(p, 'utf-8');
+        if (templateContent) break;
+      } catch {
+        // try next
+      }
+    }
+    assert.ok(templateContent.includes('compact'), 'expected templates/steering/AGENTS.md to mention compact');
+    assert.ok(
+      templateContent.includes('pigeongraph_context'),
+      'expected templates/steering/AGENTS.md to mention pigeongraph_context'
+    );
+  });
 });

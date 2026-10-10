@@ -44,6 +44,10 @@ export class SuperGraphMcpServer {
         description: `CRITICAL: Primary codebase navigation and symbol discovery tool. ALWAYS call this FIRST before attempting to grep or crawl files.
 Use this to find where any function, class, interface, method, route (e.g. '/exam', '/auth'), middleware (e.g. 'ProtectedRoute', 'CORSMiddleware'), or component is defined and used.
 Returns exact file paths, line numbers, signatures, call chains, dynamic dispatches (EventEmitters, routes), and blast radius in a single turn.
+Pagination: limit (default 5, max 20) + offset page through matches; next_offset/total_matches continue paging.
+Use token_budget with include_spans to bound served_spans source slices; toggles include_semantic/include_flows/include_dispatches/include_blast_radius trim sections; compact=true returns symbols + query_summary + pagination only (skips flows, dispatches, blast_radius, spans, semantic_context).
+query_summary reports resolved_anchor, resolved_score (0-100), alternatives (top-3 uid+score), epistemic_status, and cached (true on query-cache hit); semantic_context carries Layer 2 spec/ADR links for the anchor when present.
+Recent anchors auto-record to the observational working-set; inspect via pigeongraph_context get/clear — explore never short-circuits on memory.
 PREFER this over grep/ripgrep for any code symbol, route, or architecture search. Use grep ONLY for raw string literals, comments, or non-code text.`,
         inputSchema: {
           type: 'object',
@@ -152,7 +156,7 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
       },
       {
         name: 'pigeongraph_context',
-        description: `Observational working-set session memory digest (LRU, max 50 anchors). 'get' returns the most recent entries (max 10, <500 tokens total); 'clear' empties the memory. Recording happens automatically on every explore/impact; this tool never recomputes graph state.`,
+        description: `Observational working-set session memory digest (LRU, max 50 anchors keyed by query+anchor, staleness via H_semantic_inv). 'get' returns the most recent entries (max 10, <500 tokens total, each with query/anchor/score/symbols/risk/hits); 'clear' empties the memory. Recording happens automatically on every pigeongraph_explore/pigeongraph_impact (repeat query bumps hits); this tool never recomputes graph state and explore never short-circuits on memory.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -168,23 +172,23 @@ PREFER this over grep/ripgrep for any code symbol, route, or architecture search
       // Backward compatibility alias
       {
         name: 'supergraph_explore',
-        description: `Alias for pigeongraph_explore.`,
+        description: `Alias for pigeongraph_explore. Supports limit/offset pagination, token_budget/include_spans, include_semantic/include_flows/include_dispatches toggles, and compact mode; query_summary reports resolved_score/alternatives/cached and semantic_context carries Layer 2 links.`,
         inputSchema: {
           type: 'object',
           properties: {
-            query: { type: 'string' },
-            task_context: { type: 'string' },
-            symbol_anchor: { type: 'string' },
-            depth: { type: 'integer', default: 3 },
-            include_blast_radius: { type: 'boolean', default: true },
-            limit: { type: 'integer', default: 5 },
-            offset: { type: 'integer', default: 0 },
-            token_budget: { type: 'integer', default: 800 },
-            include_spans: { type: 'boolean', default: true },
-            include_semantic: { type: 'boolean', default: true },
-            include_flows: { type: 'boolean', default: true },
-            include_dispatches: { type: 'boolean', default: true },
-            compact: { type: 'boolean', default: false },
+            query: { type: 'string', description: 'Symbol name, route path, or natural language query.' },
+            task_context: { type: 'string', description: 'High-level objective or context for the query.' },
+            symbol_anchor: { type: 'string', description: 'Optional qualified symbol UID or name to anchor graph traversal.' },
+            depth: { type: 'integer', description: 'Traversal depth for blast radius (default: 3).', default: 3 },
+            include_blast_radius: { type: 'boolean', description: 'Include risk-weighted blast radius summary (default: true).', default: true },
+            limit: { type: 'integer', description: 'Max symbols to return (default: 5, max: 20).', default: 5 },
+            offset: { type: 'integer', description: 'Pagination offset into matched symbols (default: 0).', default: 0 },
+            token_budget: { type: 'integer', description: 'Token budget for served_spans content (default: 800).', default: 800 },
+            include_spans: { type: 'boolean', description: 'Include real source slices in served_spans (default: true).', default: true },
+            include_semantic: { type: 'boolean', description: 'Include Layer 2 semantic context for the anchor (default: true).', default: true },
+            include_flows: { type: 'boolean', description: 'Include execution flows entry_points/call_chains (default: true).', default: true },
+            include_dispatches: { type: 'boolean', description: 'Include dynamic dispatches (default: true).', default: true },
+            compact: { type: 'boolean', description: 'Compact mode: symbols + query_summary + pagination only (default: false).', default: false },
           },
           required: ['query'],
         },

@@ -136,6 +136,14 @@ export class AgentInstaller {
     return join(home, '.gemini', 'antigravity', 'mcp_config.json');
   }
 
+  public static getAntigravityWorkspaceMcpPath(projectRoot = process.cwd()): string {
+    return join(projectRoot, '.agents', 'mcp_config.json');
+  }
+
+  public static getAntigravityWorkspaceRulePath(projectRoot = process.cwd()): string {
+    return join(projectRoot, '.agents', 'rules', 'pigeongraph.md');
+  }
+
   public static getGeminiCliConfigPath(): string {
     return join(homedir(), '.gemini', 'settings.json');
   }
@@ -219,7 +227,7 @@ export class AgentInstaller {
       }
     }
 
-    // 4. Google Antigravity
+    // 4. Google Antigravity (global + workspace-local for automatic adoption)
     if (targetFilter === 'all' || targetFilter === 'antigravity') {
       const path = options.antigravityConfigPath ?? AgentInstaller.getAntigravityConfigPath();
       const json = AgentInstaller.safeReadJson(path);
@@ -228,6 +236,15 @@ export class AgentInstaller {
       const ok = AgentInstaller.safeWriteJson(path, json);
       AgentInstaller.installAntigravityInstructions();
       targets.push({ name: 'Google Antigravity', updated: ok, path });
+
+      // Workspace-local .agents/mcp_config.json travels with the repo,
+      // so anyone cloning gets PigeonGraph without running install-mcp.
+      const workspacePath = AgentInstaller.getAntigravityWorkspaceMcpPath(projectRoot);
+      const wsJson = AgentInstaller.safeReadJson(workspacePath);
+      wsJson.mcpServers = wsJson.mcpServers || {};
+      wsJson.mcpServers.pigeongraph = mcpEntry;
+      const okWs = AgentInstaller.safeWriteJson(workspacePath, wsJson);
+      targets.push({ name: 'Antigravity Workspace (.agents/mcp_config.json)', updated: okWs, path: workspacePath });
     }
 
     // 5. Gemini CLI
@@ -350,7 +367,18 @@ export class AgentInstaller {
     };
     AgentInstaller.safeWriteJson(claudeCodeMcpPath, claudeJson);
 
+    // Workspace-local Antigravity MCP so clones work with zero global setup.
+    const agWorkspacePath = AgentInstaller.getAntigravityWorkspaceMcpPath(projectRoot);
+    const agWsJson = AgentInstaller.safeReadJson(agWorkspacePath);
+    agWsJson.mcpServers = agWsJson.mcpServers || {};
+    agWsJson.mcpServers.pigeongraph = {
+      command: resolved.command,
+      args: resolved.args,
+    };
+    AgentInstaller.safeWriteJson(agWorkspacePath, agWsJson);
+
     const steeringFiles = AgentInstaller.installSteering(projectRoot);
+    AgentInstaller.installAntigravityInstructions();
 
     return {
       configPath,
@@ -382,6 +410,11 @@ When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** bef
 - Searching for raw non-code string literals (e.g., specific error messages, CSS classes, UI copy, regex patterns in .env/markdown).
 - Searching for regex patterns across non-code files.
 - PigeonGraph returned 0 results for a symbol.
+
+#### 4. Efficiency flags + working-set memory:
+- \`pigeongraph_explore\` supports \`limit\`/\`offset\` pagination (\`next_offset\`/\`total_matches\`), \`token_budget\` + \`include_spans\` for bounded source slices, \`include_semantic\`/\`include_flows\`/\`include_dispatches\`/\`include_blast_radius\` toggles, and \`compact:true\` for symbols + \`query_summary\` + pagination only (skips flows/dispatches/blast_radius/spans/\`semantic_context\`).
+- \`query_summary\` carries \`resolved_anchor\`/\`resolved_score\`/\`alternatives\`/\`cached\`; \`semantic_context\` carries Layer 2 spec/ADR links when present.
+- Recent anchors auto-record to the observational working-set; inspect via \`pigeongraph_context\` (\`get\` returns max 10 entries, <500 tokens; \`clear\` empties). Explore never short-circuits on memory.
 <!-- /pigeongraph-guidance -->`;
 
   public static installAntigravityInstructions(): boolean {
@@ -435,6 +468,14 @@ When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** bef
       AgentInstaller.PIGEONGRAPH_STEERING_GUIDANCE
     );
 
+    // 2b. GEMINI.md (Antigravity + Gemini CLI read this at workspace root;
+    // AGENTS.md alone is not enough for auto-discovery)
+    updateOrCreateSteeringFile(
+      join(projectRoot, 'GEMINI.md'),
+      '# GEMINI.md: Instructions for Antigravity & Gemini CLI',
+      AgentInstaller.PIGEONGRAPH_STEERING_GUIDANCE
+    );
+
     // 3. Cursor rules (.cursor/rules/pigeongraph.mdc)
     const cursorRule = `---
 description: PigeonGraph architectural exploration and symbol discovery rules
@@ -447,6 +488,8 @@ alwaysApply: true
 When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** before using \`grep\`, \`grep_search\`, \`find\`, or reading multiple whole files.
 - Use \`pigeongraph_explore\` (MCP) or \`pigeongraph explore "<query>"\` (CLI) for symbol definitions, routes (e.g. \`/exam\`), middleware (\`ProtectedRoute\`, \`CORSMiddleware\`), classes, functions, and call chains.
 - Use \`pigeongraph_impact\` to assess blast radius before refactoring.
+- Efficiency flags: \`limit\`/\`offset\` pagination (\`next_offset\`/\`total_matches\`), \`token_budget\` + \`include_spans\`, \`include_semantic\`/\`include_flows\`/\`include_dispatches\` toggles, and \`compact:true\` for symbols + query_summary only.
+- Recent anchors auto-record to the working-set; inspect via \`pigeongraph_context\` (\`get\`/\`clear\`).
 - Use \`grep\` ONLY for raw non-code string literals, comments, or regex across text files.
 `;
     try {
@@ -464,6 +507,32 @@ When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** bef
       '# PigeonGraph Exploration Directive',
       AgentInstaller.PIGEONGRAPH_STEERING_GUIDANCE
     );
+
+    // 4b. Antigravity-native rules (.agents/rules/pigeongraph.md).
+    // Antigravity discovers workspace rules here, not .gemini/rules/.
+    try {
+      const agRulePath = AgentInstaller.getAntigravityWorkspaceRulePath(projectRoot);
+      const agRule = `---
+description: PigeonGraph architectural exploration and symbol discovery rules
+globs: *
+alwaysApply: true
+---
+
+# 🐦 PigeonGraph Exploration Protocol (Antigravity)
+
+When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** (\`pigeongraph_explore\` MCP tool or \`pigeongraph explore "<query>"\` CLI) before using \`grep\`, \`grep_search\`, \`find\`, or reading multiple whole files.
+- Use \`pigeongraph_explore\` for symbol definitions, routes, middleware, classes, functions, and call chains.
+- Use \`pigeongraph_impact\` to assess blast radius before refactoring.
+- Efficiency flags: \`limit\`/\`offset\`, \`token_budget\` + \`include_spans\`, \`include_semantic\`/\`include_flows\`/\`include_dispatches\` toggles, and \`compact:true\` for symbols + query_summary only.
+- Recent anchors auto-record to the working-set; inspect via \`pigeongraph_context\` (\`get\`/\`clear\`).
+- Use \`grep\` ONLY for raw non-code string literals, comments, or regex across text files, or when PigeonGraph returned 0 results.
+`;
+      mkdirSync(dirname(agRulePath), { recursive: true });
+      writeFileSync(agRulePath, agRule, 'utf-8');
+      writtenFiles.push(agRulePath);
+    } catch {
+      // ignore
+    }
 
     // 5. Windsurf (.windsurfrules)
     updateOrCreateSteeringFile(

@@ -9,4 +9,6 @@ alwaysApply: true
 When exploring or modifying this codebase, **ALWAYS call PigeonGraph first** before using `grep`, `grep_search`, `find`, or reading multiple whole files.
 - Use `pigeongraph_explore` (MCP) or `pigeongraph explore "<query>"` (CLI) for symbol definitions, routes (e.g. `/exam`), middleware (`ProtectedRoute`, `CORSMiddleware`), classes, functions, and call chains.
 - Use `pigeongraph_impact` to assess blast radius before refactoring.
+- Efficiency flags: `limit`/`offset` pagination (`next_offset`/`total_matches`), `token_budget` + `include_spans`, `include_semantic`/`include_flows`/`include_dispatches` toggles, and `compact:true` for symbols + query_summary only.
+- Recent anchors auto-record to the working-set; inspect via `pigeongraph_context` (`get`/`clear`).
 - Use `grep` ONLY for raw non-code string literals, comments, or regex across text files.
